@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站封面拼接工具</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .app { display: flex; height: 100vh; }
+
+  /* ====== Sidebar ====== */
+  .sidebar {
+    width: 290px;
+    background: #fff;
+    border-right: 1px solid #e8e8e8;
+    padding: 24px 20px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .sidebar h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar h1 .logo {
+    width: 28px; height: 28px;
+    background: #fb7299;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 14px; font-weight: 800;
+  }
+  .subtitle {
+    font-size: 12px; color: #999; margin-bottom: 24px; margin-top: 4px;
+  }
+
+  .setting-group { margin-bottom: 18px; }
+  .setting-group > label {
+    display: block; font-size: 13px; font-weight: 600;
+    color: #555; margin-bottom: 8px;
+  }
+
+  .btn-group { display: flex; gap: 8px; }
+  .btn-group button {
+    flex: 1; padding: 9px 12px;
+    border: 1.5px solid #e0e0e0; border-radius: 8px;
+    background: #fff; font-size: 13px; color: #666;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-group button:hover { border-color: #fb7299; color: #fb7299; }
+  .btn-group button.active {
+    background: #fb7299; border-color: #fb7299; color: #fff;
+  }
+
+  .action-btn {
+    width: 100%; padding: 10px;
+    border: 1.5px solid #e0e0e0; border-radius: 8px;
+    background: #fff; font-size: 13px; color: #666;
+    cursor: pointer; transition: all 0.2s;
+    text-align: center;
+  }
+  .action-btn:hover { border-color: #fb7299; color: #fb7299; }
+  .action-btn.primary {
+    background: #fb7299; border-color: #fb7299; color: #fff;
+    font-weight: 600; font-size: 14px; padding: 12px;
+  }
+  .action-btn.primary:hover { background: #fa5d8f; }
+  .action-btn.danger:hover { border-color: #ff4d4f; color: #ff4d4f; }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type="range"] { flex: 1; accent-color: #fb7299; }
+  .slider-row .value {
+    font-size: 12px; color: #888;
+    min-width: 36px; text-align: right;
+  }
+
+  .color-row { display: flex; align-items: center; gap: 8px; }
+  .color-row input[type="color"] {
+    width: 42px; height: 34px;
+    border: 1px solid #e0e0e0; border-radius: 6px;
+    cursor: pointer; padding: 2px;
+  }
+  .color-row input[type="text"] {
+    flex: 1; padding: 7px 10px;
+    border: 1px solid #e0e0e0; border-radius: 6px;
+    font-size: 12px; font-family: monospace;
+  }
+
+  .dimensions {
+    font-size: 12px; color: #888;
+    text-align: center; padding: 8px;
+    background: #f5f5f5; border-radius: 6px;
+    margin-top: 10px;
+  }
+
+  .divider { height: 1px; background: #e8e8e8; margin: 18px 0; }
+
+  .tip {
+    font-size: 11px; color: #aaa; line-height: 1.8; margin-top: 16px;
+  }
+  .tip b { color: #888; }
+
+  .btn-spacer { height: 8px; }
+
+  /* ====== Main ====== */
+  .main {
+    flex: 1; display: flex;
+    align-items: center; justify-content: center;
+    padding: 30px; overflow: auto;
+  }
+  .cover-wrapper {
+    width: 100%; max-width: 900px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.12);
+    border-radius: 6px; overflow: hidden;
+  }
+  .cover {
+    width: 100%; aspect-ratio: 16/9;
+    display: grid; background: #000;
+    position: relative; overflow: hidden;
+  }
+
+  /* ====== Cell ====== */
+  .cell {
+    position: relative; overflow: hidden;
+    cursor: pointer;
+    background-color: #1a1a1a;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  .cell.empty { cursor: pointer; }
+  .cell.empty::before {
+    content: '+';
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 30px; font-weight: 300; color: #555;
+  }
+  .cell.empty::after {
+    content: attr(data-index);
+    position: absolute; bottom: 6px; right: 8px;
+    font-size: 11px; color: #444; font-weight: 600;
+  }
+  .cell:not(.empty) { cursor: grab; }
+  .cell:not(.empty).dragging { cursor: grabbing; }
+
+  .cell-overlay {
+    position: absolute; top: 5px; right: 5px;
+    display: flex; gap: 4px;
+    opacity: 0; transition: opacity 0.15s;
+    z-index: 10;
+  }
+  .cell:hover .cell-overlay { opacity: 1; }
+  .cell-overlay button {
+    width: 26px; height: 26px;
+    border: none; border-radius: 5px;
+    background: rgba(0,0,0,0.55); color: #fff;
+    font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+    backdrop-filter: blur(4px);
+  }
+  .cell-overlay button:hover { background: rgba(0,0,0,0.8); }
+
+  .zoom-indicator {
+    position: absolute; bottom: 5px; left: 5px;
+    font-size: 10px; color: rgba(255,255,255,0.85);
+    background: rgba(0,0,0,0.5);
+    padding: 2px 7px; border-radius: 4px;
+    opacity: 0; transition: opacity 0.15s;
+    backdrop-filter: blur(4px);
+  }
+  .cell:hover .zoom-indicator { opacity: 1; }
+
+  .cell.dragover {
+    outline: 2px dashed #fb7299;
+    outline-offset: -3px;
+  }
+
+  /* Scrollbar */
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+
+  /* Export overlay */
+  .export-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; backdrop-filter: blur(2px);
+  }
+  .export-overlay .box {
+    background: #fff; border-radius: 12px;
+    padding: 30px 40px; text-align: center;
+  }
+  .export-overlay .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid #f0f0f0;
+    border-top-color: #fb7299;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .export-overlay .text { font-size: 14px; color: #666; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <h1><span class="logo">B</span>B站封面拼接工具</h1>
+    <p class="subtitle">图片拼接 · 自由调整 · PNG导出</p>
+
+    <div class="setting-group">
+      <label>尺寸比例</label>
+      <div class="btn-group" id="ratioGroup">
+        <button data-ratio="16:9" class="active">16 : 9</button>
+        <button data-ratio="4:3">4 : 3</button>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <label>图片数量</label>
+      <div class="btn-group" id="countGroup">
+        <button data-count="9" class="active">9张 (3x3)</button>
+        <button data-count="12">12张 (4x3)</button>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <label>图片间距</label>
+      <div class="slider-row">
+        <input type="range" id="gapSlider" min="0" max="40" value="4">
+        <span class="value" id="gapValue">4px</span>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <label>圆角大小</label>
+      <div class="slider-row">
+        <input type="range" id="radiusSlider" min="0" max="40" value="0">
+        <span class="value" id="radiusValue">0px</span>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <label>背景颜色</label>
+      <div class="color-row">
+        <input type="color" id="bgColorPicker" value="#000000">
+        <input type="text" id="bgColorText" value="#000000">
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="action-btn" id="batchUploadBtn">批量上传图片</button>
+    <div class="btn-spacer"></div>
+    <button class="action-btn danger" id="clearAllBtn">清空所有图片</button>
+    <div class="btn-spacer"></div>
+    <button class="action-btn primary" id="exportBtn">导出 PNG 图片</button>
+
+    <div class="dimensions" id="dimensions">1920 x 1080 px</div>
+
+    <div class="tip">
+      <b>操作说明</b><br>
+      • 点击空格子可上传单张图片<br>
+      • <b>拖拽图片可调整展示区域</b>（不会露出空隙）<br>
+      • 滚轮可缩放图片（以鼠标位置为中心）<br>
+      • <b>松手后自动吸附到边框</b><br>
+      • 双击图片可重置位置和缩放<br>
+      • 悬停后右上角可替换/重置/删除<br>
+      • 支持拖拽图片文件到格子上
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="cover-wrapper">
+      <div class="cover" id="cover"></div>
+    </div>
+  </main>
+</div>
+
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+
+<script>
+// ====== roundRect polyfill ======
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (typeof r === 'number') r = [r, r, r, r];
+    this.beginPath();
+    this.moveTo(x + r[0], y);
+    this.lineTo(x + w - r[1], y);
+    this.quadraticCurveTo(x + w, y, x + w, y + r[1]);
+    this.lineTo(x + w, y + h - r[2]);
+    this.quadraticCurveTo(x + w, y + h, x + w - r[2], y + h);
+    this.lineTo(x + r[3], y + h);
+    this.quadraticCurveTo(x, y + h, x, y + h - r[3]);
+    this.lineTo(x, y + r[0]);
+    this.quadraticCurveTo(x, y, x + r[0], y);
+    this.closePath();
+  };
+}
+
+// ====== State ======
+const state = {
+  ratio: '16:9',
+  count: 9,
+  gap: 4,
+  radius: 0,
+  bgColor: '#000000',
+  cells: [],
+};
+
+const dimensions = {
+  '16:9': { w: 1920, h: 1080 },
+  '4:3':  { w: 1440, h: 1080 },
+};
+
+const layouts = {
+  9:  { cols: 3, rows: 3 },
+  12: { cols: 4, rows: 3 },
+};
+
+const coverEl = document.getElementById('cover');
+const fileInput = document.getElementById('fileInput');
+let currentCellIndex = -1; // -1 = batch upload
+
+// ====== Init cells ======
+function initCells() {
+  state.cells = [];
+  for (let i = 0; i < state.count; i++) {
+    state.cells.push({ img: null, src: null, panX: 0, panY: 0, zoom: 1 });
+  }
+}
+
+// ====== Build grid ======
+function buildGrid() {
+  const layout = layouts[state.count];
+  coverEl.innerHTML = '';
+  coverEl.style.aspectRatio = state.ratio.replace(':', '/');
+  coverEl.style.gridTemplateColumns = `repeat(${layout.cols}, 1fr)`;
+  coverEl.style.gridTemplateRows = `repeat(${layout.rows}, 1fr)`;
+  coverEl.style.gap = state.gap + 'px';
+  coverEl.style.background = state.bgColor;
+  coverEl.style.borderRadius = state.radius + 'px';
+
+  for (let i = 0; i < state.count; i++) {
+    const cellEl = document.createElement('div');
+    cellEl.className = 'cell' + (state.cells[i].img ? '' : ' empty');
+    cellEl.dataset.index = String(i + 1);
+    cellEl.dataset.cellIndex = i;
+    cellEl.style.borderRadius = state.radius + 'px';
+
+    if (state.cells[i].img) {
+      cellEl.style.backgroundImage = `url('${state.cells[i].src}')`;
+
+      // Overlay buttons
+      var overlay = document.createElement('div');
+      overlay.className = 'cell-overlay';
+      overlay.innerHTML =
+        '<button data-action="replace" title="替换图片">↻</button>' +
+        '<button data-action="reset" title="重置位置">⊙</button>' +
+        '<button data-action="remove" title="删除图片">✕</button>';
+      cellEl.appendChild(overlay);
+
+      // Zoom indicator
+      var zoomInd = document.createElement('div');
+      zoomInd.className = 'zoom-indicator';
+      zoomInd.textContent = Math.round(state.cells[i].zoom * 100) + '%';
+      cellEl.appendChild(zoomInd);
+    }
+
+    setupCellInteraction(cellEl, i);
+    coverEl.appendChild(cellEl);
+
+    // Apply background size/position AFTER cell is in DOM
+    if (state.cells[i].img) {
+      updateCellBackground(i);
+    }
+  }
+}
+
+// ====== Update cell background (background-image approach — no clipping) ======
+function updateCellBackground(index) {
+  const cellEl = coverEl.children[index];
+  if (!cellEl || !state.cells[index].img) return;
+  var c = state.cells[index];
+  var img = c.img;
+  var rect = cellEl.getBoundingClientRect();
+  var cw = rect.width;
+  var ch = rect.height;
+  var iw = img.naturalWidth;
+  var ih = img.naturalHeight;
+  // Cover-fit scale → percentage of cell size → multiplied by zoom
+  var coverScale = Math.max(cw / iw, ch / ih);
+  var sizeX = (iw * coverScale * c.zoom / cw) * 100;
+  var sizeY = (ih * coverScale * c.zoom / ch) * 100;
+  cellEl.style.backgroundSize = sizeX + '% ' + sizeY + '%';
+  cellEl.style.backgroundPosition = 'calc(50% + ' + c.panX + 'px) calc(50% + ' + c.panY + 'px)';
+}
+
+function updateCellDisplay(index) {
+  const cellEl = coverEl.children[index];
+  if (!cellEl) return;
+  if (state.cells[index].img) updateCellBackground(index);
+  var zInd = cellEl.querySelector('.zoom-indicator');
+  if (zInd) zInd.textContent = Math.round(state.cells[index].zoom * 100) + '%';
+}
+
+// ====== Boundary clamp — keep image covering cell, no gaps ======
+function clampPan(index, enableSnap) {
+  const cellEl = coverEl.children[index];
+  if (!cellEl || !state.cells[index].img) return;
+  const rect = cellEl.getBoundingClientRect();
+  const cw = rect.width;
+  const ch = rect.height;
+  const img = state.cells[index].img;
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const z = state.cells[index].zoom;
+
+  // Total image display size = cover-fit × zoom
+  var coverScale = Math.max(cw / iw, ch / ih);
+  var dw = iw * coverScale * z;   // displayed image width
+  var dh = ih * coverScale * z;   // displayed image height
+
+  // Each axis pan independently — only the overflowing dimension can move
+  var maxX = Math.max(0, (dw - cw) / 2);
+  var maxY = Math.max(0, (dh - ch) / 2);
+
+  var px = state.cells[index].panX;
+  var py = state.cells[index].panY;
+
+  // Hard clamp — image edges must NOT expose cell background
+  px = Math.max(-maxX, Math.min(maxX, px));
+  py = Math.max(-maxY, Math.min(maxY, py));
+
+  // Magnetic snap to cell borders when close (on pointer release)
+  if (enableSnap) {
+    var snapThreshold = 8;
+    if (px > maxX - snapThreshold && px <= maxX) px = maxX;
+    if (px < -maxX + snapThreshold && px >= -maxX) px = -maxX;
+    if (py > maxY - snapThreshold && py <= maxY) py = maxY;
+    if (py < -maxY + snapThreshold && py >= -maxY) py = -maxY;
+  }
+
+  state.cells[index].panX = px;
+  state.cells[index].panY = py;
+}
+
+// ====== Cell interaction (pan / zoom / click / drag-drop) ======
+function setupCellInteraction(cellEl, index) {
+  let isDragging = false;
+  let startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+
+  // --- Click to upload (empty cell) ---
+  cellEl.addEventListener('click', (e) => {
+    if (e.target.closest('.cell-overlay')) return;
+    if (!state.cells[index].img) {
+      currentCellIndex = index;
+      fileInput.value = '';
+      fileInput.click();
+    }
+  });
+
+  // --- Pan via pointer drag ---
+  cellEl.addEventListener('pointerdown', (e) => {
+    if (!state.cells[index].img) return;
+    if (e.target.closest('.cell-overlay')) return;
+    if (e.button !== 0) return;
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startPanX = state.cells[index].panX;
+    startPanY = state.cells[index].panY;
+    cellEl.setPointerCapture(e.pointerId);
+    cellEl.classList.add('dragging');
+  });
+
+  cellEl.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    state.cells[index].panX = startPanX + (e.clientX - startX);
+    state.cells[index].panY = startPanY + (e.clientY - startY);
+    clampPan(index, false); // hard clamp during drag, no snap
+    updateCellDisplay(index);
+  });
+
+  const endDrag = () => {
+    isDragging = false;
+    cellEl.classList.remove('dragging');
+    clampPan(index, true); // snap to borders on release
+    updateCellDisplay(index);
+  };
+  cellEl.addEventListener('pointerup', endDrag);
+  cellEl.addEventListener('pointercancel', endDrag);
+
+  // --- Zoom via wheel (centered on mouse) ---
+  cellEl.addEventListener('wheel', (e) => {
+    if (!state.cells[index].img) return;
+    e.preventDefault();
+    const rect = cellEl.getBoundingClientRect();
+    const mx = e.clientX - rect.left - rect.width / 2;
+    const my = e.clientY - rect.top - rect.height / 2;
+    const oldZoom = state.cells[index].zoom;
+    const factor = e.deltaY > 0 ? 0.92 : 1.08;
+    let newZoom = Math.max(1, Math.min(10, oldZoom * factor));
+    // Snap to minimum zoom when close
+    if (newZoom < 1.06) newZoom = 1;
+    const ratio = newZoom / oldZoom;
+    state.cells[index].panX = mx - (mx - state.cells[index].panX) * ratio;
+    state.cells[index].panY = my - (my - state.cells[index].panY) * ratio;
+    state.cells[index].zoom = newZoom;
+    clampPan(index, false);
+    updateCellDisplay(index);
+  }, { passive: false });
+
+  // --- Double click to reset ---
+  cellEl.addEventListener('dblclick', (e) => {
+    if (!state.cells[index].img) return;
+    if (e.target.closest('.cell-overlay')) return;
+    state.cells[index].panX = 0;
+    state.cells[index].panY = 0;
+    state.cells[index].zoom = 1;
+    updateCellDisplay(index);
+  });
+
+  // --- Overlay buttons ---
+  const overlay = cellEl.querySelector('.cell-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = e.target.dataset.action;
+      if (action === 'replace') {
+        currentCellIndex = index;
+        fileInput.value = '';
+        fileInput.click();
+      } else if (action === 'reset') {
+        state.cells[index].panX = 0;
+        state.cells[index].panY = 0;
+        state.cells[index].zoom = 1;
+        updateCellDisplay(index);
+      } else if (action === 'remove') {
+        state.cells[index].img = null;
+        state.cells[index].src = null;
+        state.cells[index].panX = 0;
+        state.cells[index].panY = 0;
+        state.cells[index].zoom = 1;
+        buildGrid();
+      }
+    });
+  }
+
+  // --- Drag-and-drop image file ---
+  cellEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    cellEl.classList.add('dragover');
+  });
+  cellEl.addEventListener('dragleave', () => {
+    cellEl.classList.remove('dragover');
+  });
+  cellEl.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    cellEl.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    await loadImage(files[0], index);
+    buildGrid();
+  });
+}
+
+// ====== Load image into cell ======
+function loadImage(file, cellIndex) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        if (cellIndex >= 0 && cellIndex < state.cells.length) {
+          state.cells[cellIndex].img = img;
+          state.cells[cellIndex].src = e.target.result;
+          state.cells[cellIndex].panX = 0;
+          state.cells[cellIndex].panY = 0;
+          state.cells[cellIndex].zoom = 1;
+        }
+        resolve();
+      };
+      img.onerror = () => resolve();
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve();
+    reader.readAsDataURL(file);
+  });
+}
+
+// ====== File input handler ======
+fileInput.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+
+  if (currentCellIndex >= 0) {
+    // Single cell upload
+    await loadImage(files[0], currentCellIndex);
+    buildGrid();
+  } else {
+    // Batch upload — fill empty cells in order
+    let idx = 0;
+    for (const file of files) {
+      while (idx < state.cells.length && state.cells[idx].img) idx++;
+      if (idx >= state.cells.length) break;
+      await loadImage(file, idx);
+      idx++;
+    }
+    buildGrid();
+  }
+
+  fileInput.value = '';
+  currentCellIndex = -1;
+});
+
+// ====== Settings: ratio ======
+document.getElementById('ratioGroup').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') return;
+  document.querySelectorAll('#ratioGroup button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  state.ratio = e.target.dataset.ratio;
+  updateDimensions();
+  buildGrid();
+});
+
+// ====== Settings: count ======
+document.getElementById('countGroup').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') return;
+  document.querySelectorAll('#countGroup button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  state.count = parseInt(e.target.dataset.count);
+  initCells();
+  buildGrid();
+});
+
+// ====== Settings: gap ======
+document.getElementById('gapSlider').addEventListener('input', (e) => {
+  state.gap = parseInt(e.target.value);
+  document.getElementById('gapValue').textContent = state.gap + 'px';
+  coverEl.style.gap = state.gap + 'px';
+});
+
+// ====== Settings: radius ======
+document.getElementById('radiusSlider').addEventListener('input', (e) => {
+  state.radius = parseInt(e.target.value);
+  document.getElementById('radiusValue').textContent = state.radius + 'px';
+  coverEl.style.borderRadius = state.radius + 'px';
+  coverEl.querySelectorAll('.cell').forEach(c => c.style.borderRadius = state.radius + 'px');
+});
+
+// ====== Settings: bg color ======
+const bgColorPicker = document.getElementById('bgColorPicker');
+const bgColorText = document.getElementById('bgColorText');
+bgColorPicker.addEventListener('input', (e) => {
+  state.bgColor = e.target.value;
+  bgColorText.value = e.target.value;
+  coverEl.style.background = state.bgColor;
+});
+bgColorText.addEventListener('input', (e) => {
+  const v = e.target.value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+    state.bgColor = v;
+    bgColorPicker.value = v;
+    coverEl.style.background = state.bgColor;
+  }
+});
+
+// ====== Batch upload ======
+document.getElementById('batchUploadBtn').addEventListener('click', () => {
+  currentCellIndex = -1;
+  fileInput.value = '';
+  fileInput.click();
+});
+
+// ====== Clear all ======
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (!confirm('确定清空所有图片吗？')) return;
+  initCells();
+  buildGrid();
+});
+
+// ====== Export PNG ======
+document.getElementById('exportBtn').addEventListener('click', exportPNG);
+
+function updateDimensions() {
+  const d = dimensions[state.ratio];
+  document.getElementById('dimensions').textContent = `${d.w} x ${d.h} px`;
+}
+
+function exportPNG() {
+  // Show loading overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'export-overlay';
+  overlay.innerHTML = '<div class="box"><div class="spinner"></div><div class="text">正在生成图片...</div></div>';
+  document.body.appendChild(overlay);
+
+  // Use setTimeout to let overlay render
+  setTimeout(() => {
+    try {
+      _doExport();
+    } catch (err) {
+      alert('导出失败: ' + err.message);
+    } finally {
+      overlay.remove();
+    }
+  }, 50);
+}
+
+function _doExport() {
+  const dims = dimensions[state.ratio];
+  const layout = layouts[state.count];
+  const canvas = document.createElement('canvas');
+  canvas.width = dims.w;
+  canvas.height = dims.h;
+  const ctx = canvas.getContext('2d');
+
+  // Display → export scale
+  const displayRect = coverEl.getBoundingClientRect();
+  const scale = dims.w / displayRect.width;
+  const gapE = state.gap * scale;
+  const radiusE = state.radius * scale;
+
+  // Background
+  ctx.fillStyle = state.bgColor;
+  if (radiusE > 0) {
+    ctx.beginPath();
+    ctx.roundRect(0, 0, dims.w, dims.h, radiusE);
+    ctx.fill();
+  } else {
+    ctx.fillRect(0, 0, dims.w, dims.h);
+  }
+
+  // Cell dimensions
+  const cellW = (dims.w - (layout.cols - 1) * gapE) / layout.cols;
+  const cellH = (dims.h - (layout.rows - 1) * gapE) / layout.rows;
+
+  // Draw each cell
+  for (let i = 0; i < state.count; i++) {
+    const row = Math.floor(i / layout.cols);
+    const col = i % layout.cols;
+    const cx = col * (cellW + gapE);
+    const cy = row * (cellH + gapE);
+
+    const cell = state.cells[i];
+
+    // Clip to cell (with optional rounded corners)
+    ctx.save();
+    if (radiusE > 0) {
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cellW, cellH, radiusE);
+      ctx.clip();
+    } else {
+      ctx.beginPath();
+      ctx.rect(cx, cy, cellW, cellH);
+      ctx.clip();
+    }
+
+    if (!cell.img) {
+      // Empty cell — fill dark
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(cx, cy, cellW, cellH);
+    } else {
+      // Draw image with pan/zoom
+      const iw = cell.img.naturalWidth;
+      const ih = cell.img.naturalHeight;
+      const baseScale = Math.max(cellW / iw, cellH / ih);
+      const totalScale = baseScale * cell.zoom;
+      const drawW = iw * totalScale;
+      const drawH = ih * totalScale;
+      const drawX = cx + (cellW - drawW) / 2 + cell.panX * scale;
+      const drawY = cy + (cellH - drawH) / 2 + cell.panY * scale;
+      ctx.drawImage(cell.img, drawX, drawY, drawW, drawH);
+    }
+
+    ctx.restore();
+  }
+
+  // Download
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ratioStr = state.ratio.replace(':', 'x');
+    a.download = `bilibili-cover-${ratioStr}-${state.count}p-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
+// ====== Drag-drop on cover (batch) ======
+coverEl.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+coverEl.addEventListener('drop', async (e) => {
+  // Only handle drops on the cover background (not on cells — cells handle their own)
+  if (e.target.closest('.cell')) return;
+  e.preventDefault();
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  if (files.length === 0) return;
+  let idx = 0;
+  for (const file of files) {
+    while (idx < state.cells.length && state.cells[idx].img) idx++;
+    if (idx >= state.cells.length) break;
+    await loadImage(file, idx);
+    idx++;
+  }
+  buildGrid();
+});
+
+// ====== Init ======
+initCells();
+updateDimensions();
+buildGrid();
+</script>
+</body>
+</html>

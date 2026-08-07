@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=ZCOOL+QingKe+HuangYou&family=ZCOOL+XiaoWei&family=Long+Cang&family=Ma+Shan+Zheng&family=Liu+Jian+Mao+Cao&family=Zhi+Mang+Xing&family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+<title>B站封面工具 - 人像抠图版</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Microsoft YaHei','Segoe UI',sans-serif;background:#0f0f0f;color:#e0e0e0;height:100vh;overflow:hidden;user-select:none}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* ===== Top bar ===== */
+.topbar{display:flex;align-items:center;gap:20px;padding:10px 20px;background:#1a1a1a;border-bottom:1px solid #2a2a2a;flex-shrink:0}
+.logo{font-size:15px;font-weight:700;color:#fc5c7d;white-space:nowrap}
+.topbar-group{display:flex;gap:6px}
+.topbar-group button{padding:6px 14px;border:1px solid #333;background:#222;color:#ccc;border-radius:6px;cursor:pointer;font-size:13px;transition:all .15s}
+.topbar-group button:hover{background:#2a2a2a;color:#fff}
+.topbar-group button.active{background:#fc5c7d;border-color:#fc5c7d;color:#fff}
+.topbar-spacer{flex:1}
+
+/* ===== Stage layout ===== */
+.stage{display:none;flex:1;overflow:hidden}
+.stage.active{display:flex}
+.sidebar{width:250px;background:#1a1a1a;border-right:1px solid #2a2a2a;padding:16px;overflow-y:auto;flex-shrink:0}
+.canvas-area{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#0a0a0a}
+
+/* ===== Sidebar sections ===== */
+.sb-section{margin-bottom:18px}
+.sb-title{font-size:12px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:8px;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+.sb-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.sb-label{font-size:13px;color:#aaa;width:48px;flex-shrink:0}
+.sb-btn{padding:7px 12px;border:1px solid #333;background:#222;color:#ccc;border-radius:6px;cursor:pointer;font-size:13px;transition:all .15s;flex:1}
+.sb-btn:hover{background:#2a2a2a;color:#fff}
+.sb-btn.active{background:#fc5c7d;border-color:#fc5c7d;color:#fff}
+.sb-btn.primary{background:#fc5c7d;border-color:#fc5c7d;color:#fff;font-weight:600}
+.sb-btn.primary:hover{background:#ff7a99}
+.sb-btn:disabled{opacity:.35;cursor:not-allowed}
+.sb-btn.danger{border-color:#5a2222;color:#e88}
+.sb-btn.danger:hover{background:#3a1818}
+input[type=range]{flex:1;-webkit-appearance:none;height:4px;background:#333;border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#fc5c7d;border-radius:50%;cursor:pointer}
+input[type=color]{width:36px;height:30px;border:1px solid #333;border-radius:6px;cursor:pointer;background:none;padding:0}
+select{padding:6px 8px;border:1px solid #333;background:#222;color:#ccc;border-radius:6px;font-size:13px;cursor:pointer}
+.font-picker{position:relative;flex:1}
+.font-picker-btn{width:100%;padding:8px 10px;border:1px solid #333;background:#222;color:#ccc;border-radius:6px;cursor:pointer;font-size:14px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.font-picker-btn:hover{border-color:#fc5c7d}
+.font-picker-btn .arrow{font-size:10px;color:#888;transition:transform .2s}
+.font-picker-btn.open .arrow{transform:rotate(180deg)}
+.font-picker-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:320px;overflow-y:auto;background:#1a1a1a;border:1px solid #333;border-radius:8px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;padding:4px}
+.font-picker-panel.open{display:block}
+.font-option{padding:8px 12px;border-radius:6px;cursor:pointer;font-size:18px;color:#ddd;transition:background .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.font-option:hover{background:#2a2a2a;color:#fff}
+.font-option.active{background:#2a1a22;color:#fc5c7d}
+.sb-val{font-size:12px;color:#888;min-width:38px;text-align:right}
+.sb-checkbox{display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;font-size:13px;color:#ccc}
+.sb-checkbox input{width:16px;height:16px;accent-color:#fc5c7d;cursor:pointer}
+.tip{background:#141414;border:1px solid #222;border-radius:8px;padding:10px;font-size:12px;color:#777;line-height:1.6}
+.tip b{color:#aaa}
+
+/* ===== Mask canvas ===== */
+#mask-wrapper{position:relative;transform-origin:center center;transition:none}
+#image-canvas,#mask-canvas{display:block;position:absolute;top:0;left:0}
+#image-canvas{position:relative}
+#mask-canvas{opacity:.45;pointer-events:auto}
+#mask-wrapper.tool-pan #mask-canvas{cursor:grab}
+#mask-wrapper.tool-pan.dragging #mask-canvas{cursor:grabbing}
+#mask-wrapper.tool-brush #mask-canvas{cursor:none}
+#mask-wrapper.tool-eraser #mask-canvas{cursor:none}
+#upload-prompt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#555}
+#upload-prompt .icon{font-size:48px;margin-bottom:12px}
+#upload-prompt p{font-size:14px}
+#upload-prompt .hint{font-size:12px;color:#333;margin-top:6px}
+.brush-cursor{position:fixed;border:2px solid #fff;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);mix-blend-mode:difference;display:none;z-index:9999;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+
+.mask-status{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-between;padding:6px 16px;background:rgba(0,0,0,.6);font-size:12px;color:#888;backdrop-filter:blur(8px)}
+
+/* ===== Compose canvas ===== */
+#compose-canvas{position:relative;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.6);border-radius:4px;background:#000}
+
+/* Layer order: bg image (0) → text (1) → foreground mask (2) → guides (10) */
+#bg-full-img{position:absolute;z-index:0;pointer-events:none;-webkit-user-drag:none}
+#text-layer{position:absolute;inset:0;z-index:1;pointer-events:none}
+.text-el{position:absolute;transform:translate(-50%,-50%);cursor:move;white-space:pre;text-align:center;line-height:1.35;padding:4px 8px;outline:none;pointer-events:auto;transition:none;will-change:left,top}
+.text-el.selected{outline:1px dashed rgba(252,92,125,.6);outline-offset:2px}
+.text-el.dragging{opacity:.85;outline:1px solid #fc5c7d;outline-offset:2px;box-shadow:0 4px 20px rgba(252,92,125,.3)}
+.text-el.editing{cursor:text;outline:1px solid #fc5c7d;outline-offset:2px;background:rgba(0,0,0,.15)}
+/* Drag ghost — semi-transparent preview at original position */
+.text-ghost{position:absolute;transform:translate(-50%,-50%);pointer-events:none;opacity:.25;white-space:pre;text-align:center;line-height:1.35;padding:4px 8px;z-index:1}
+/* Position badge during drag */
+.drag-badge{position:fixed;z-index:9999;background:rgba(252,92,125,.95);color:#fff;font-size:11px;padding:3px 8px;border-radius:4px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#fg-mask-layer{position:absolute;z-index:2;pointer-events:none}
+#fg-mask-img{position:absolute;pointer-events:none;-webkit-user-drag:none}
+
+/* Guides */
+#guides-layer{position:absolute;inset:0;z-index:10;pointer-events:none}
+.guide-line{position:absolute;background:none;opacity:0;transition:opacity .15s}
+.guide-line.show{opacity:1}
+.guide-h{left:0;right:0;height:0;border-top:1px dashed rgba(255,255,255,.35)}
+.guide-v{top:0;bottom:0;width:0;border-left:1px dashed rgba(255,255,255,.35)}
+.guide-h.snap{border-top-color:#fc5c7d;opacity:.8}
+.guide-v.snap{border-left-color:#fc5c7d;opacity:.8}
+.guide-h.thirds{border-top:1px dashed rgba(255,255,255,.2)}
+.guide-v.thirds{border-left:1px dashed rgba(255,255,255,.2)}
+.safe-area{position:absolute;border:2px solid rgba(252,92,125,.3);border-radius:2px;pointer-events:none;display:none}
+.safe-area.show{display:block}
+
+.compose-status{position:absolute;bottom:0;left:0;right:0;padding:6px 16px;background:rgba(0,0,0,.6);font-size:12px;color:#888;display:flex;justify-content:space-between;backdrop-filter:blur(8px)}
+
+.hidden-input{display:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ===== Top bar ===== -->
+  <div class="topbar">
+    <span class="logo">🎨 B站封面 · 人像抠图</span>
+    <div class="topbar-group" id="ratio-tabs">
+      <button class="active" data-ratio="16:9">16:9</button>
+      <button data-ratio="4:3">4:3</button>
+    </div>
+    <div class="topbar-group" id="stage-tabs">
+      <button class="active" data-stage="mask">① 抠图</button>
+      <button data-stage="compose">② 排版</button>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div style="font-size:12px;color:#555">导出尺寸: <span id="size-display">1920×1080</span></div>
+  </div>
+
+  <!-- ===== Mask Stage ===== -->
+  <div id="mask-stage" class="stage active">
+    <div class="sidebar">
+      <div class="sb-section">
+        <div class="sb-title">📁 图片</div>
+        <button class="sb-btn primary" id="btn-upload">上传图片</button>
+        <input type="file" id="file-image" class="hidden-input" accept="image/*">
+      </div>
+      <div class="sb-section">
+        <div class="sb-title">🖌 工具</div>
+        <div class="sb-row">
+          <button class="sb-btn active" data-tool="brush">画笔</button>
+          <button class="sb-btn" data-tool="eraser">橡皮</button>
+        </div>
+        <div class="sb-row">
+          <span class="sb-label">大小</span>
+          <input type="range" id="brush-size" min="5" max="300" value="50">
+          <span class="sb-val" id="brush-size-val">50px</span>
+        </div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-title">🔍 缩放</div>
+        <div class="sb-row">
+          <button class="sb-btn" id="btn-zoom-out">−</button>
+          <span class="sb-val" id="zoom-val" style="flex:1;text-align:center">100%</span>
+          <button class="sb-btn" id="btn-zoom-in">+</button>
+        </div>
+        <div class="sb-row">
+          <button class="sb-btn" id="btn-fit">适应窗口</button>
+          <button class="sb-btn" id="btn-100">1:1</button>
+        </div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-title">⚙ 操作</div>
+        <div class="sb-row">
+          <button class="sb-btn" id="btn-undo">撤销</button>
+          <button class="sb-btn" id="btn-invert">反选</button>
+        </div>
+        <div class="sb-row">
+          <button class="sb-btn danger" id="btn-clear">清空遮罩</button>
+        </div>
+      </div>
+      <div class="sb-section">
+        <button class="sb-btn primary" id="btn-confirm" style="width:100%;padding:12px">✅ 确认涂抹 → 排版</button>
+      </div>
+      <div class="tip">
+        <b>操作说明</b><br>
+        • 用画笔涂抹需要浮在文字<b>上方</b>的区域（如人物）<br>
+        • <b>原图不会改变</b>，涂抹的区域在排版时会覆盖在文字之上<br>
+        • <b>滚轮</b>缩放，<b>按住空格+拖拽</b>平移<br>
+        • 可放大到像素级精细涂抹<br>
+        • 快捷键: B画笔 E橡皮 Ctrl+Z撤销
+      </div>
+    </div>
+    <div class="canvas-area" id="mask-area">
+      <div id="mask-wrapper" class="tool-brush">
+        <canvas id="image-canvas"></canvas>
+        <canvas id="mask-canvas"></canvas>
+      </div>
+      <div id="upload-prompt">
+        <div class="icon">📷</div>
+        <p>点击左侧「上传图片」开始</p>
+        <p class="hint">支持 JPG / PNG / WebP</p>
+      </div>
+      <div class="mask-status">
+        <span id="mask-info">未加载图片</span>
+        <span id="mask-zoom-info">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Compose Stage ===== -->
+  <div id="compose-stage" class="stage">
+    <div class="sidebar">
+      <div class="sb-section">
+        <div class="sb-title">🖼 图片</div>
+        <button class="sb-btn" id="btn-back-mask" style="width:100%">← 重新涂抹</button>
+        <div style="font-size:11px;color:#666;margin-top:6px">图片已固定为满屏覆盖，无需调整</div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">📝 文字</div>
+        <button class="sb-btn primary" id="btn-add-text" style="width:100%;margin-bottom:10px">+ 添加文字</button>
+        <div id="text-controls" style="display:none">
+          <div class="font-picker" id="font-picker">
+            <button class="font-picker-btn" id="font-picker-btn">
+              <span id="font-picker-label" style="font-family:'ZCOOL KuaiLe',sans-serif">站酷快乐体</span>
+              <span class="arrow">▼</span>
+            </button>
+            <div class="font-picker-panel" id="font-picker-panel"></div>
+          </div>
+          <div class="sb-row">
+            <span class="sb-label">大小</span>
+            <input type="range" id="text-size" min="20" max="600" value="80">
+            <span class="sb-val" id="text-size-val">80</span>
+          </div>
+          <div class="sb-row">
+            <span class="sb-label">颜色</span>
+            <input type="color" id="text-color" value="#ffffff">
+            <button class="sb-btn" id="btn-bold" style="flex:0;padding:6px 12px;font-weight:bold">B</button>
+          </div>
+          <div class="sb-row">
+            <span class="sb-label">描边</span>
+            <input type="range" id="text-stroke" min="0" max="20" value="0">
+            <span class="sb-val" id="text-stroke-val">0</span>
+          </div>
+          <div class="sb-row">
+            <span class="sb-label">描边色</span>
+            <input type="color" id="text-stroke-color" value="#000000">
+          </div>
+          <div class="sb-row">
+            <span class="sb-label">阴影</span>
+            <input type="range" id="text-shadow" min="0" max="30" value="0">
+            <span class="sb-val" id="text-shadow-val">0</span>
+          </div>
+          <div class="sb-row">
+            <button class="sb-btn danger" id="btn-del-text" style="width:100%">删除文字</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">📏 辅助线</div>
+        <label class="sb-checkbox"><input type="checkbox" id="guide-center" checked> 居中十字线</label>
+        <label class="sb-checkbox"><input type="checkbox" id="guide-thirds"> 三分线</label>
+        <label class="sb-checkbox"><input type="checkbox" id="guide-safe"> 安全区</label>
+      </div>
+
+      <div class="sb-section">
+        <button class="sb-btn primary" id="btn-export" style="width:100%;padding:12px;font-size:15px">📤 导出 PNG</button>
+      </div>
+
+      <div class="tip">
+        <b>图层结构</b><br>
+        ① 底层：完整原图（固定满屏）<br>
+        ② 中层：你添加的文字<br>
+        ③ 顶层：涂抹区域（浮在文字上）<br><br>
+        <b>操作</b><br>
+        • <b>双击</b>文字可编辑内容<br>
+        • <b>拖拽</b>文字可移动（带虚影预览）<br>
+        • 靠近中心线会自动吸附<br>
+        • 可调描边/阴影增强可读性
+      </div>
+    </div>
+
+    <div class="canvas-area" id="compose-area">
+      <div id="compose-canvas">
+        <img id="bg-full-img">
+        <div id="text-layer"></div>
+        <div id="fg-mask-layer">
+          <img id="fg-mask-img">
+        </div>
+        <div id="guides-layer">
+          <div class="guide-line guide-h" id="guide-h-center" style="top:50%"></div>
+          <div class="guide-line guide-v" id="guide-v-center" style="left:50%"></div>
+          <div class="guide-line guide-h thirds" id="guide-h-1" style="top:33.33%"></div>
+          <div class="guide-line guide-h thirds" id="guide-h-2" style="top:66.67%"></div>
+          <div class="guide-line guide-v thirds" id="guide-v-1" style="left:33.33%"></div>
+          <div class="guide-line guide-v thirds" id="guide-v-2" style="left:66.67%"></div>
+          <div class="safe-area" id="safe-area"></div>
+        </div>
+      </div>
+      <div class="compose-status">
+        <span id="compose-info">—</span>
+        <span id="compose-coords">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="brush-cursor" id="brush-cursor"></div>
+
+<script>
+// ===== State =====
+const state = {
+  ratio: '16:9',
+  stage: 'mask',
+  // Mask
+  image: null,
+  brushSize: 50,
+  tool: 'brush',
+  maskZoom: 1,
+  maskPanX: 0,
+  maskPanY: 0,
+  undoStack: [],
+  isSpaceDown: false,
+  isPanning: false,
+  isDrawing: false,
+  lastDrawX: 0,
+  lastDrawY: 0,
+  // Compose — image is fixed at cover-scale (no zoom/pan)
+  foregroundCanvas: null,
+  foregroundImg: null,
+  // Text
+  texts: [],
+  selectedTextId: null,
+  editingTextId: null,
+  textIdCounter: 0,
+  isDraggingText: false,
+  // Guides
+  guides: { center: true, thirds: false, safe: false },
+};
+
+const EXPORT_SIZES = {
+  '16:9': { w: 1920, h: 1080 },
+  '4:3':  { w: 1440, h: 1080 },
+};
+
+// ===== DOM refs =====
+const $ = id => document.getElementById(id);
+const imageCanvas = $('image-canvas');
+const maskCanvas  = $('mask-canvas');
+const maskWrapper = $('mask-wrapper');
+const maskArea    = $('mask-area');
+const composeCanvas = $('compose-canvas');
+const composeArea  = $('compose-area');
+const textLayer   = $('text-layer');
+const bgFullImg   = $('bg-full-img');
+const fgMaskImg   = $('fg-mask-img');
+const brushCursor = $('brush-cursor');
+
+const imageCtx = imageCanvas.getContext('2d');
+const maskCtx  = maskCanvas.getContext('2d');
+
+// ===== Mask Stage (unchanged from v1) =====
+
+function loadImageFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => loadImageSrc(e.target.result);
+  reader.readAsDataURL(file);
+}
+
+function loadImageSrc(src) {
+  const img = new Image();
+  img.onload = () => {
+    let w = img.naturalWidth, h = img.naturalHeight;
+    const maxDim = 4096;
+    if (w > maxDim || h > maxDim) {
+      const s = maxDim / Math.max(w, h);
+      w = Math.round(w * s); h = Math.round(h * s);
+    }
+    imageCanvas.width = w;  imageCanvas.height = h;
+    maskCanvas.width  = w;  maskCanvas.height  = h;
+    imageCtx.drawImage(img, 0, 0, w, h);
+    maskCtx.clearRect(0, 0, w, h);
+    state.image = img;
+    state.undoStack = [];
+    $('upload-prompt').style.display = 'none';
+    maskWrapper.style.display = '';
+    fitToView();
+    updateMaskInfo();
+  };
+  img.src = src;
+}
+
+function fitToView() {
+  if (!state.image) return;
+  const aw = maskArea.clientWidth - 40, ah = maskArea.clientHeight - 40;
+  const iw = imageCanvas.width, ih = imageCanvas.height;
+  state.maskZoom = Math.min(aw / iw, ah / ih, 1);
+  state.maskPanX = 0; state.maskPanY = 0;
+  updateMaskTransform();
+}
+
+function setZoom100() {
+  if (!state.image) return;
+  state.maskZoom = 1; state.maskPanX = 0; state.maskPanY = 0;
+  updateMaskTransform();
+}
+
+function updateMaskTransform() {
+  maskWrapper.style.transform = `translate(${state.maskPanX}px,${state.maskPanY}px) scale(${state.maskZoom})`;
+  $('zoom-val').textContent = Math.round(state.maskZoom * 100) + '%';
+  $('mask-zoom-info').textContent = `缩放: ${Math.round(state.maskZoom * 100)}%`;
+  updateBrushCursorSize();
+}
+
+function zoomAtPoint(cx, cy, factor) {
+  const oldZ = state.maskZoom;
+  const newZ = Math.max(0.05, Math.min(20, oldZ * factor));
+  if (newZ === oldZ) return;
+  const r = newZ / oldZ;
+  state.maskPanX = cx - (cx - state.maskPanX) * r;
+  state.maskPanY = cy - (cy - state.maskPanY) * r;
+  state.maskZoom = newZ;
+  updateMaskTransform();
+}
+
+function getCanvasCoords(e) {
+  const rect = maskCanvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (maskCanvas.width / rect.width),
+    y: (e.clientY - rect.top)  * (maskCanvas.height / rect.height)
+  };
+}
+
+function drawBrushStroke(x1, y1, x2, y2) {
+  const sz = state.brushSize;
+  maskCtx.lineWidth = sz;
+  maskCtx.lineCap = 'round'; maskCtx.lineJoin = 'round';
+  maskCtx.beginPath(); maskCtx.moveTo(x1, y1); maskCtx.lineTo(x2, y2); maskCtx.stroke();
+  maskCtx.beginPath(); maskCtx.arc(x1, y1, sz/2, 0, Math.PI*2); maskCtx.fill();
+  maskCtx.beginPath(); maskCtx.arc(x2, y2, sz/2, 0, Math.PI*2); maskCtx.fill();
+}
+
+function setBrushMode() {
+  if (state.tool === 'eraser') {
+    maskCtx.globalCompositeOperation = 'destination-out';
+    maskCtx.strokeStyle = 'rgba(0,0,0,1)';
+    maskCtx.fillStyle   = 'rgba(0,0,0,1)';
+  } else {
+    maskCtx.globalCompositeOperation = 'source-over';
+    maskCtx.strokeStyle = 'rgba(255,50,50,1)';
+    maskCtx.fillStyle   = 'rgba(255,50,50,1)';
+  }
+}
+
+function saveUndo() {
+  try {
+    state.undoStack.push(maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
+    if (state.undoStack.length > 15) state.undoStack.shift();
+  } catch(e) {}
+}
+
+function undo() {
+  if (!state.undoStack.length) return;
+  maskCtx.putImageData(state.undoStack.pop(), 0, 0);
+}
+
+function clearMask() { saveUndo(); maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height); }
+
+function invertMask() {
+  saveUndo();
+  const w = maskCanvas.width, h = maskCanvas.height;
+  const d = maskCtx.getImageData(0, 0, w, h).data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i+3];
+    d[i]=255; d[i+1]=50; d[i+2]=50; d[i+3]=255-a;
+  }
+  maskCtx.putImageData(new ImageData(d, w, h), 0, 0);
+}
+
+function hasMask() {
+  const w = maskCanvas.width, h = maskCanvas.height;
+  if (!w || !h) return false;
+  const d = maskCtx.getImageData(0, 0, w, h).data;
+  const step = 4 * Math.max(1, Math.floor((w*h)/100000));
+  for (let i = 3; i < d.length; i += step) if (d[i] > 0) return true;
+  return false;
+}
+
+// ===== Confirm mask → create foreground layer =====
+// Foreground = same full image, but only masked pixels visible (rest transparent)
+// Background = the full original image unchanged
+// Text goes between them
+function confirmMask() {
+  if (!state.image) { alert('请先上传图片'); return; }
+  if (!hasMask()) { alert('请先用画笔涂抹需要浮在文字上方的区域'); return; }
+
+  const w = imageCanvas.width, h = imageCanvas.height;
+
+  // Create foreground canvas: draw full image, then keep only masked pixels
+  const fg = document.createElement('canvas');
+  fg.width = w; fg.height = h;
+  const fctx = fg.getContext('2d');
+  fctx.drawImage(state.image, 0, 0, w, h);
+  fctx.globalCompositeOperation = 'destination-in';
+  fctx.drawImage(maskCanvas, 0, 0);
+
+  state.foregroundCanvas = fg;
+
+  // Load as image for display
+  const fgImg = new Image();
+  fgImg.onload = () => {
+    state.foregroundImg = fgImg;
+    // Set background image src for display
+    bgFullImg.src = state.image.src;
+    fgMaskImg.src = fgImg.src;
+    switchStage('compose');
+    setTimeout(() => { resizeCompose(); renderCompose(); }, 60);
+  };
+  fgImg.src = fg.toDataURL('image/png');
+}
+
+// ===== Brush cursor =====
+function updateBrushCursorSize() {
+  const sz = state.brushSize * state.maskZoom;
+  brushCursor.style.width = sz + 'px';
+  brushCursor.style.height = sz + 'px';
+}
+
+// ===== Mask events =====
+maskWrapper.addEventListener('pointerdown', e => {
+  if (!state.image) return;
+  if (state.isSpaceDown || state.tool === 'pan') {
+    state.isPanning = true;
+    maskWrapper.classList.add('dragging');
+    state._panStart = { x: e.clientX, y: e.clientY, panX: state.maskPanX, panY: state.maskPanY };
+    e.preventDefault(); return;
+  }
+  if (state.tool === 'brush' || state.tool === 'eraser') {
+    state.isDrawing = true;
+    saveUndo(); setBrushMode();
+    const p = getCanvasCoords(e);
+    state.lastDrawX = p.x; state.lastDrawY = p.y;
+    drawBrushStroke(p.x, p.y, p.x, p.y);
+    e.preventDefault();
+  }
+});
+
+maskWrapper.addEventListener('pointermove', e => {
+  if (state.image && (state.tool === 'brush' || state.tool === 'eraser') && !state.isSpaceDown) {
+    brushCursor.style.display = 'block';
+    brushCursor.style.left = e.clientX + 'px';
+    brushCursor.style.top  = e.clientY + 'px';
+  } else { brushCursor.style.display = 'none'; }
+
+  if (state.isPanning) {
+    state.maskPanX = state._panStart.panX + (e.clientX - state._panStart.x);
+    state.maskPanY = state._panStart.panY + (e.clientY - state._panStart.y);
+    updateMaskTransform(); return;
+  }
+  if (state.isDrawing) {
+    const p = getCanvasCoords(e);
+    drawBrushStroke(state.lastDrawX, state.lastDrawY, p.x, p.y);
+    state.lastDrawX = p.x; state.lastDrawY = p.y;
+  }
+});
+
+window.addEventListener('pointerup', () => {
+  state.isDrawing = false; state.isPanning = false;
+  maskWrapper.classList.remove('dragging');
+});
+
+maskArea.addEventListener('mouseleave', () => { brushCursor.style.display = 'none'; });
+
+maskWrapper.addEventListener('wheel', e => {
+  if (!state.image) return;
+  e.preventDefault();
+  const ar = maskArea.getBoundingClientRect();
+  const cx = e.clientX - ar.left - ar.width/2;
+  const cy = e.clientY - ar.top  - ar.height/2;
+  zoomAtPoint(cx, cy, e.deltaY > 0 ? 0.9 : 1.1);
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+  if (state.stage !== 'mask') return;
+  if (e.code === 'Space' && !state.isSpaceDown) {
+    state.isSpaceDown = true;
+    maskWrapper.classList.remove('tool-brush','tool-eraser');
+    maskWrapper.classList.add('tool-pan');
+    brushCursor.style.display = 'none';
+    e.preventDefault();
+  }
+  if (e.key === 'b' || e.key === 'B') setTool('brush');
+  if (e.key === 'e' || e.key === 'E') setTool('eraser');
+  if ((e.ctrlKey||e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') {
+    state.isSpaceDown = false;
+    maskWrapper.classList.remove('tool-pan');
+    maskWrapper.classList.add('tool-' + state.tool);
+  }
+});
+
+function setTool(tool) {
+  state.tool = tool;
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+  maskWrapper.classList.remove('tool-brush','tool-eraser','tool-pan');
+  maskWrapper.classList.add('tool-' + tool);
+}
+
+function updateMaskInfo() {
+  $('mask-info').textContent = state.image ? `${imageCanvas.width}×${imageCanvas.height}px` : '未加载图片';
+}
+
+// ===== Compose Stage =====
+
+function resizeCompose() {
+  const ratio = state.ratio === '16:9' ? 16/9 : 4/3;
+  const aw = composeArea.clientWidth - 60, ah = composeArea.clientHeight - 60;
+  let w = aw, h = w / ratio;
+  if (h > ah) { h = ah; w = h * ratio; }
+  composeCanvas.style.width  = w + 'px';
+  composeCanvas.style.height = h + 'px';
+  $('compose-info').textContent = `${state.ratio} · 显示 ${Math.round(w)}×${Math.round(h)}`;
+  renderCompose();
+}
+
+// Calculate how the image should be positioned/sized inside the compose canvas
+// Image is fixed at cover-scale (fills canvas, no zoom/pan)
+function getImageDisplay() {
+  const cw = composeCanvas.clientWidth;
+  const ch = composeCanvas.clientHeight;
+  const iw = state.image.naturalWidth;
+  const ih = state.image.naturalHeight;
+  const coverScale = Math.max(cw / iw, ch / ih);
+  const dw = iw * coverScale;
+  const dh = ih * coverScale;
+  const dx = (cw - dw) / 2;
+  const dy = (ch - dh) / 2;
+  return { dx, dy, dw, dh };
+}
+
+function renderCompose() {
+  if (!state.image) return;
+  const { dx, dy, dw, dh } = getImageDisplay();
+
+  // Background image (full, fixed cover-scale)
+  bgFullImg.style.left   = dx + 'px';
+  bgFullImg.style.top    = dy + 'px';
+  bgFullImg.style.width  = dw + 'px';
+  bgFullImg.style.height = dh + 'px';
+
+  // Foreground masked region (same position as background)
+  if (state.foregroundImg) {
+    fgMaskImg.style.left   = dx + 'px';
+    fgMaskImg.style.top    = dy + 'px';
+    fgMaskImg.style.width  = dw + 'px';
+    fgMaskImg.style.height = dh + 'px';
+  }
+
+  // Text elements — rebuild only when not actively dragging
+  if (!state.isDraggingText) {
+    // Save editing text content before rebuild to prevent data loss
+    if (state.editingTextId !== null) {
+      const editEl = textLayer.querySelector(`[data-id="${state.editingTextId}"]`);
+      if (editEl) {
+        const editingText = state.texts.find(t => t.id === state.editingTextId);
+        if (editingText) editingText.text = editEl.innerText.replace(/\n$/, '');
+      }
+    }
+    const wasEditing = state.editingTextId;
+    textLayer.innerHTML = '';
+    state.texts.forEach(t => {
+      const el = document.createElement('div');
+      el.className = 'text-el';
+      el.dataset.id = t.id;
+      el.textContent = t.text;
+      el.style.left = (t.x * 100) + '%';
+      el.style.top  = (t.y * 100) + '%';
+      const ds = composeCanvas.clientHeight / EXPORT_SIZES[state.ratio].h;
+      el.style.fontSize = (t.fontSize * ds) + 'px';
+      el.style.fontFamily = t.fontFamily;
+      el.style.color = t.color;
+      el.style.fontWeight = t.bold ? 'bold' : 'normal';
+      // Stroke
+      if (t.stroke > 0) {
+        const sw = t.stroke * ds;
+        el.style.webkitTextStroke = sw + 'px ' + t.strokeColor;
+      }
+      // Shadow
+      if (t.shadow > 0) {
+        const sh = t.shadow * ds;
+        el.style.textShadow = `0 ${sh*0.5}px ${sh}px rgba(0,0,0,0.6)`;
+      }
+      if (t.id === state.selectedTextId) el.classList.add('selected');
+      if (t.id === state.editingTextId) { el.classList.add('editing'); el.contentEditable = 'true'; }
+      setupTextEvents(el, t);
+      textLayer.appendChild(el);
+    });
+
+    // Restore focus if was editing
+    if (wasEditing !== null) {
+      const newEl = textLayer.querySelector(`[data-id="${wasEditing}"]`);
+      if (newEl) {
+        newEl.focus();
+        // Place cursor at end
+        const range = document.createRange();
+        range.selectNodeContents(newEl);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(range);
+      }
+    }
+  }
+
+  // Guides
+  updateGuides();
+
+  // Sidebar text controls
+  const sel = state.texts.find(t => t.id === state.selectedTextId);
+  if (sel) {
+    $('text-controls').style.display = '';
+    updateFontPickerDisplay(sel.fontFamily);
+    $('text-size').value = sel.fontSize;
+    $('text-size-val').textContent = sel.fontSize;
+    $('text-color').value = sel.color;
+    $('btn-bold').classList.toggle('active', sel.bold);
+    $('text-stroke').value = sel.stroke || 0;
+    $('text-stroke-val').textContent = sel.stroke || 0;
+    $('text-stroke-color').value = sel.strokeColor || '#000000';
+    $('text-shadow').value = sel.shadow || 0;
+    $('text-shadow-val').textContent = sel.shadow || 0;
+  } else {
+    $('text-controls').style.display = 'none';
+  }
+}
+
+// ===== Text events =====
+// Key fix: NEVER call renderCompose() during mousedown/drag — it destroys DOM elements
+// and breaks drag closures + dblclick. Update element styles directly instead.
+function setupTextEvents(el, t) {
+  // --- Drag (mousedown) ---
+  el.addEventListener('pointerdown', e => {
+    if (state.editingTextId === t.id) return; // don't drag while editing
+    if (e.button !== 0) return;
+    e.stopPropagation();
+
+    // Select this text (update classes directly, no renderCompose)
+    state.texts.forEach(other => {
+      const oe = textLayer.querySelector(`[data-id="${other.id}"]`);
+      if (oe) oe.classList.toggle('selected', other.id === t.id);
+    });
+    state.selectedTextId = t.id;
+    // Show sidebar controls
+    $('text-controls').style.display = '';
+    const sel = state.texts.find(tt => tt.id === t.id);
+    if (sel) {
+      updateFontPickerDisplay(sel.fontFamily);
+      $('text-size').value = sel.fontSize;
+      $('text-size-val').textContent = sel.fontSize;
+      $('text-color').value = sel.color;
+      $('btn-bold').classList.toggle('active', sel.bold);
+      $('text-stroke').value = sel.stroke || 0;
+      $('text-stroke-val').textContent = sel.stroke || 0;
+      $('text-stroke-color').value = sel.strokeColor || '#000000';
+      $('text-shadow').value = sel.shadow || 0;
+      $('text-shadow-val').textContent = sel.shadow || 0;
+    }
+
+    const rect = composeCanvas.getBoundingClientRect();
+    const startMX = e.clientX, startMY = e.clientY;
+    const startTX = t.x, startTY = t.y;
+    let hasMoved = false;
+    let ghostEl = null;
+    let badgeEl = null;
+
+    // Use pointer capture for smooth dragging
+    el.setPointerCapture(e.pointerId);
+
+    const onMove = ev => {
+      const dxN = (ev.clientX - startMX) / rect.width;
+      const dyN = (ev.clientY - startMY) / rect.height;
+      if (!hasMoved && Math.abs(dxN) + Math.abs(dyN) > 0.003) {
+        hasMoved = true;
+        state.isDraggingText = true;
+        el.classList.add('dragging');
+        // Create ghost at original position
+        ghostEl = el.cloneNode(true);
+        ghostEl.classList.remove('dragging', 'selected', 'editing');
+        ghostEl.classList.add('text-ghost');
+        ghostEl.removeAttribute('data-id');
+        ghostEl.style.left = (startTX * 100) + '%';
+        ghostEl.style.top = (startTY * 100) + '%';
+        textLayer.appendChild(ghostEl);
+        // Create drag badge
+        badgeEl = document.createElement('div');
+        badgeEl.className = 'drag-badge';
+        document.body.appendChild(badgeEl);
+      }
+      if (!hasMoved) return;
+
+      let nx = Math.max(0, Math.min(1, startTX + dxN));
+      let ny = Math.max(0, Math.min(1, startTY + dyN));
+
+      // Snap to center
+      const sH = $('guide-h-center'), sV = $('guide-v-center');
+      if (Math.abs(nx - 0.5) < 0.015) { nx = 0.5; sV.classList.add('snap'); } else sV.classList.remove('snap');
+      if (Math.abs(ny - 0.5) < 0.015) { ny = 0.5; sH.classList.add('snap'); } else sH.classList.remove('snap');
+
+      t.x = nx; t.y = ny;
+      // Update element position directly — NO renderCompose
+      el.style.left = (nx * 100) + '%';
+      el.style.top = (ny * 100) + '%';
+
+      // Update badge position
+      if (badgeEl) {
+        badgeEl.textContent = `x:${Math.round(nx*100)}%  y:${Math.round(ny*100)}%`;
+        badgeEl.style.left = (ev.clientX + 14) + 'px';
+        badgeEl.style.top = (ev.clientY + 14) + 'px';
+      }
+      $('compose-coords').textContent = `文字 x:${Math.round(nx*100)}% y:${Math.round(ny*100)}%`;
+    };
+
+    const onUp = ev => {
+      el.releasePointerCapture(e.pointerId);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+      $('guide-h-center').classList.remove('snap');
+      $('guide-v-center').classList.remove('snap');
+      el.classList.remove('dragging');
+      if (ghostEl) ghostEl.remove();
+      if (badgeEl) badgeEl.remove();
+      state.isDraggingText = false;
+      if (!hasMoved) {
+        // Just a click, no drag — keep selected, no renderCompose needed
+      }
+    };
+
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+  });
+
+  // --- Double-click to edit ---
+  el.addEventListener('dblclick', e => {
+    e.stopPropagation();
+    state.editingTextId = t.id;
+    state.selectedTextId = t.id;
+    el.classList.add('editing');
+    el.classList.add('selected');
+    el.contentEditable = 'true';
+    el.focus();
+    // Select all text
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+  });
+
+  // --- Save on blur ---
+  el.addEventListener('blur', () => {
+    if (state.editingTextId === t.id) {
+      t.text = el.innerText.replace(/\n$/, '');
+      state.editingTextId = null;
+      el.contentEditable = 'false';
+      el.classList.remove('editing');
+    }
+  });
+
+  // --- Escape to exit edit ---
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Escape') el.blur();
+    e.stopPropagation(); // prevent global delete handler while editing
+  });
+}
+
+// ===== Click empty area to deselect text =====
+composeCanvas.addEventListener('pointerdown', e => {
+  if (e.target.classList.contains('text-el') || state.editingTextId !== null) return;
+  // Click on empty area deselects text
+  if (state.selectedTextId !== null) {
+    const oldEl = textLayer.querySelector(`[data-id="${state.selectedTextId}"]`);
+    if (oldEl) oldEl.classList.remove('selected');
+    state.selectedTextId = null;
+    $('text-controls').style.display = 'none';
+  }
+});
+
+// Delete key
+window.addEventListener('keydown', e => {
+  if (state.stage !== 'compose') return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && state.editingTextId === null && state.selectedTextId !== null) {
+    e.preventDefault();
+    state.texts = state.texts.filter(t => t.id !== state.selectedTextId);
+    state.selectedTextId = null;
+    renderCompose();
+  }
+  if (e.key === 'Escape') {
+    state.selectedTextId = null;
+    state.editingTextId = null;
+    renderCompose();
+  }
+});
+
+function addText() {
+  const id = ++state.textIdCounter;
+  const t = {
+    id, text: '双击编辑文字',
+    x: 0.5, y: 0.5,
+    fontSize: 80,
+    fontFamily: "'ZCOOL KuaiLe', sans-serif",
+    color: '#ffffff',
+    bold: true,
+    stroke: 0,
+    strokeColor: '#000000',
+    shadow: 0
+  };
+  state.texts.push(t);
+  state.selectedTextId = id;
+  renderCompose();
+  // Auto-enter edit mode
+  setTimeout(() => {
+    const el = textLayer.querySelector(`[data-id="${id}"]`);
+    if (el) {
+      state.editingTextId = id;
+      el.classList.add('editing');
+      el.contentEditable = 'true';
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(range);
+    }
+  }, 30);
+}
+
+function updateGuides() {
+  $('guide-h-center').classList.toggle('show', state.guides.center);
+  $('guide-v-center').classList.toggle('show', state.guides.center);
+  $('guide-h-1').classList.toggle('show', state.guides.thirds);
+  $('guide-h-2').classList.toggle('show', state.guides.thirds);
+  $('guide-v-1').classList.toggle('show', state.guides.thirds);
+  $('guide-v-2').classList.toggle('show', state.guides.thirds);
+  const safe = $('safe-area');
+  safe.classList.toggle('show', state.guides.safe);
+  if (state.guides.safe) { safe.style.left='5%'; safe.style.top='5%'; safe.style.right='5%'; safe.style.bottom='5%'; }
+}
+
+// ===== Export =====
+async function exportPNG() {
+  const exp = EXPORT_SIZES[state.ratio];
+  const canvas = document.createElement('canvas');
+  canvas.width = exp.w; canvas.height = exp.h;
+  const ctx = canvas.getContext('2d');
+
+  // Wait for web fonts to be loaded
+  if (document.fonts && document.fonts.ready) {
+    await document.fonts.ready;
+  }
+
+  // Image is fixed at cover-scale (no zoom/pan)
+  const iw = state.image.naturalWidth;
+  const ih = state.image.naturalHeight;
+  const coverScale = Math.max(exp.w / iw, exp.h / ih);
+  const dw = iw * coverScale;
+  const dh = ih * coverScale;
+  const dx = (exp.w - dw) / 2;
+  const dy = (exp.h - dh) / 2;
+
+  // Layer 1: Full image (background)
+  ctx.drawImage(state.image, dx, dy, dw, dh);
+
+  // Layer 2: Text (with stroke and shadow)
+  state.texts.forEach(t => {
+    const fontWeight = t.bold ? 'bold ' : '';
+    ctx.font = `${fontWeight}${t.fontSize}px ${t.fontFamily}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const lines = t.text.split('\n');
+    const lh = t.fontSize * 1.35;
+    const totalH = lines.length * lh;
+    const startY = t.y * exp.h - totalH / 2 + lh / 2;
+    const cx = t.x * exp.w;
+
+    lines.forEach((line, i) => {
+      const ly = startY + i * lh;
+
+      // Shadow
+      if (t.shadow > 0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillText(line, cx, ly + t.shadow * 0.5);
+        ctx.restore();
+      }
+
+      // Stroke (draw behind fill)
+      if (t.stroke > 0) {
+        ctx.save();
+        ctx.strokeStyle = t.strokeColor || '#000000';
+        ctx.lineWidth = t.stroke * 2;
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.strokeText(line, cx, ly);
+        ctx.restore();
+      }
+
+      // Fill
+      ctx.fillStyle = t.color;
+      ctx.fillText(line, cx, ly);
+    });
+  });
+
+  // Layer 3: Masked region (same position as background — floats above text)
+  if (state.foregroundCanvas) {
+    ctx.drawImage(state.foregroundCanvas, dx, dy, dw, dh);
+  }
+
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cover-${state.ratio.replace(':','x')}-${Date.now()}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
+}
+
+// ===== Stage switching =====
+function switchStage(name) {
+  state.stage = name;
+  document.querySelectorAll('#stage-tabs button').forEach(b => b.classList.toggle('active', b.dataset.stage === name));
+  $('mask-stage').classList.toggle('active', name === 'mask');
+  $('compose-stage').classList.toggle('active', name === 'compose');
+  if (name === 'mask') { brushCursor.style.display = 'none'; setTimeout(() => { if (state.image) fitToView(); }, 50); }
+  if (name === 'compose') { setTimeout(() => { resizeCompose(); }, 50); }
+}
+
+function switchRatio(ratio) {
+  state.ratio = ratio;
+  document.querySelectorAll('#ratio-tabs button').forEach(b => b.classList.toggle('active', b.dataset.ratio === ratio));
+  const exp = EXPORT_SIZES[ratio];
+  $('size-display').textContent = `${exp.w}×${exp.h}`;
+  if (state.stage === 'compose') resizeCompose();
+}
+
+// ===== Event bindings =====
+$('btn-upload').onclick = () => $('file-image').click();
+$('file-image').onchange = e => { if (e.target.files[0]) loadImageFile(e.target.files[0]); };
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+$('brush-size').oninput = e => { state.brushSize = parseInt(e.target.value); $('brush-size-val').textContent = state.brushSize + 'px'; updateBrushCursorSize(); };
+$('btn-zoom-in').onclick  = () => zoomAtPoint(0, 0, 1.2);
+$('btn-zoom-out').onclick = () => zoomAtPoint(0, 0, 0.8);
+$('btn-fit').onclick  = fitToView;
+$('btn-100').onclick  = setZoom100;
+$('btn-undo').onclick = undo;
+$('btn-clear').onclick = clearMask;
+$('btn-invert').onclick = invertMask;
+$('btn-confirm').onclick = confirmMask;
+
+// Compose controls
+$('btn-back-mask').onclick = () => switchStage('mask');
+
+$('btn-add-text').onclick = addText;
+// ===== Font picker with hover preview =====
+const FONT_LIST = [
+  { val: "'ZCOOL KuaiLe', sans-serif", name: '站酷快乐体' },
+  { val: "'ZCOOL QingKe HuangYou', sans-serif", name: '站酷庆科黄油体' },
+  { val: "'ZCOOL XiaoWei', serif", name: '站酷小薇' },
+  { val: "'Noto Serif SC', serif", name: '思源宋体' },
+  { val: "'Noto Sans SC', sans-serif", name: '思源黑体' },
+  { val: "'Long Cang', cursive", name: '龙藏体' },
+  { val: "'Ma Shan Zheng', cursive", name: '马善政毛笔' },
+  { val: "'Liu Jian Mao Cao', cursive", name: '柳建毛草体' },
+  { val: "'Zhi Mang Xing', cursive", name: '志莽行书' },
+  { val: "'Microsoft YaHei', sans-serif", name: '微软雅黑' },
+  { val: "'SimHei', sans-serif", name: '黑体' },
+  { val: 'Impact, sans-serif', name: 'Impact' }
+];
+const fontPanel = $('font-picker-panel');
+const fontBtn = $('font-picker-btn');
+const fontLabel = $('font-picker-label');
+let fontPreviewOriginal = null; // stores original fontFamily before hover preview
+let fontPickerOpen = false;
+
+// Build panel
+FONT_LIST.forEach(f => {
+  const opt = document.createElement('div');
+  opt.className = 'font-option';
+  opt.dataset.value = f.val;
+  opt.dataset.name = f.name;
+  opt.textContent = f.name;
+  opt.style.fontFamily = f.val;
+  fontPanel.appendChild(opt);
+});
+
+function openFontPicker() {
+  fontPickerOpen = true;
+  fontPanel.classList.add('open');
+  fontBtn.classList.add('open');
+  // Mark active
+  const t = state.texts.find(t => t.id === state.selectedTextId);
+  const curVal = t ? t.fontFamily : '';
+  fontPanel.querySelectorAll('.font-option').forEach(o => {
+    o.classList.toggle('active', o.dataset.value === curVal);
+  });
+  // Store original for revert on close-without-click
+  if (t) fontPreviewOriginal = t.fontFamily;
+}
+function closeFontPicker() {
+  fontPickerOpen = false;
+  fontPanel.classList.remove('open');
+  fontBtn.classList.remove('open');
+  // Revert to original if user closed without clicking an option
+  if (fontPreviewOriginal !== null) {
+    const t = state.texts.find(t => t.id === state.selectedTextId);
+    if (t && t.fontFamily !== fontPreviewOriginal) {
+      t.fontFamily = fontPreviewOriginal;
+      renderCompose();
+    }
+  }
+  fontPreviewOriginal = null;
+}
+fontBtn.onclick = (e) => {
+  e.stopPropagation();
+  if (fontPickerOpen) closeFontPicker(); else openFontPicker();
+};
+// Click outside to close
+document.addEventListener('click', (e) => {
+  if (!fontPickerOpen) return;
+  if (!e.target.closest('#font-picker')) closeFontPicker();
+});
+// Hover preview — apply font to selected text instantly
+fontPanel.addEventListener('mouseover', (e) => {
+  const opt = e.target.closest('.font-option');
+  if (!opt) return;
+  const t = state.texts.find(t => t.id === state.selectedTextId);
+  if (t) {
+    t.fontFamily = opt.dataset.value;
+    // Direct DOM update for instant preview (no full renderCompose)
+    const el = document.querySelector(`.text-el[data-id="${t.id}"]`);
+    if (el) el.style.fontFamily = t.fontFamily;
+    fontLabel.style.fontFamily = opt.dataset.value;
+    fontLabel.textContent = opt.dataset.name;
+  }
+});
+// Click to confirm
+fontPanel.addEventListener('click', (e) => {
+  const opt = e.target.closest('.font-option');
+  if (!opt) return;
+  const t = state.texts.find(t => t.id === state.selectedTextId);
+  if (t) {
+    t.fontFamily = opt.dataset.value;
+    fontPreviewOriginal = opt.dataset.value; // prevent revert
+    renderCompose();
+  }
+  closeFontPicker();
+});
+
+// Helper: update font picker button display
+function updateFontPickerDisplay(fontFamily) {
+  const match = FONT_LIST.find(f => f.val === fontFamily);
+  if (match) {
+    fontLabel.textContent = match.name;
+    fontLabel.style.fontFamily = match.val;
+  }
+}
+$('text-size').oninput = e => { const t = state.texts.find(t => t.id === state.selectedTextId); if (t) { t.fontSize = parseInt(e.target.value); $('text-size-val').textContent = t.fontSize; renderCompose(); } };
+$('text-color').oninput = e => { const t = state.texts.find(t => t.id === state.selectedTextId); if (t) { t.color = e.target.value; renderCompose(); } };
+$('btn-bold').onclick = () => { const t = state.texts.find(t => t.id === state.selectedTextId); if (t) { t.bold = !t.bold; renderCompose(); } };
+$('text-stroke').oninput = e => { const t = state.texts.find(t => t.id === state.selectedTextId); if (t) { t.stroke = parseInt(e.target.value); $('text-stroke-val').textContent = t.stroke; renderCompose(); } };
+$('text-stroke-color').oninput = e => { const t = state.texts.find(t => t.id === state.selectedTextId); if (t) { t.strokeColor = e.target.value; renderCompose(); } };
+$('text-shadow').oninput = e => { const t = state.texts.find(t => t.id === state.selectedTextId); if (t) { t.shadow = parseInt(e.target.value); $('text-shadow-val').textContent = t.shadow; renderCompose(); } };
+$('btn-del-text').onclick = () => { if (state.selectedTextId !== null) { state.texts = state.texts.filter(t => t.id !== state.selectedTextId); state.selectedTextId = null; renderCompose(); } };
+
+$('guide-center').onchange = e => { state.guides.center = e.target.checked; updateGuides(); };
+$('guide-thirds').onchange = e => { state.guides.thirds = e.target.checked; updateGuides(); };
+$('guide-safe').onchange   = e => { state.guides.safe   = e.target.checked; updateGuides(); };
+
+$('btn-export').onclick = exportPNG;
+
+document.querySelectorAll('#ratio-tabs button').forEach(b => b.onclick = () => switchRatio(b.dataset.ratio));
+document.querySelectorAll('#stage-tabs button').forEach(b => {
+  b.onclick = () => {
+    if (b.dataset.stage === 'compose' && !state.foregroundCanvas) { alert('请先在抠图阶段上传图片并确认涂抹'); return; }
+    switchStage(b.dataset.stage);
+  };
+});
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (state.stage === 'mask' && state.image) fitToView();
+    if (state.stage === 'compose') resizeCompose();
+  }, 100);
+});
+
+// Init
+maskWrapper.style.display = 'none';
+updateMaskInfo();
+</script>
+</body>
+</html>
