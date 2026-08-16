@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B站视频封面生成器 | 16:9 专辑封面自动生成</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #00a1d6;
+            --primary-dark: #0091c2;
+            --primary-light: #e6f7ff;
+            --bg: #f4f5f7;
+            --card-bg: #ffffff;
+            --text: #18191c;
+            --text-secondary: #61666d;
+            --text-tertiary: #9499a0;
+            --border: #e3e5e7;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.12);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 16px;
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #00a1d6 0%, #0288d1 100%);
+            color: white;
+            padding: 28px 0 24px;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0, 161, 214, 0.3);
+        }
+
+        header h1 {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+        }
+
+        /* Mode toggle */
+        .mode-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 24px;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 4px;
+            box-shadow: var(--shadow);
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .mode-toggle button {
+            padding: 10px 28px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+            font-family: inherit;
+        }
+
+        .mode-toggle button.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 161, 214, 0.3);
+        }
+
+        .mode-toggle button:hover:not(.active) {
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+
+        /* Panel */
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        /* Card */
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title .num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 32px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background: #fafbfc;
+            position: relative;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .upload-area .upload-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+            opacity: 0.6;
+        }
+
+        .upload-area .upload-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+        }
+
+        .upload-area .upload-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+        }
+
+        .upload-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Image preview (single) */
+        .single-image-preview {
+            margin-top: 12px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #fafbfc;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
+        .single-image-preview.show {
+            display: flex;
+        }
+
+        .single-image-preview img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+        }
+
+        .single-image-preview .file-info {
+            flex: 1;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .single-image-preview .file-info .name {
+            color: var(--text);
+            font-weight: 500;
+            margin-bottom: 2px;
+            word-break: break-all;
+        }
+
+        .single-image-preview .remove-btn {
+            background: none;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .single-image-preview .remove-btn:hover {
+            color: #f5544c;
+            background: #fef0f0;
+        }
+
+        /* Input group */
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 600px) {
+            .input-group {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .input-field label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .input-field input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--text);
+            background: var(--card-bg);
+            transition: var(--transition);
+        }
+
+        .input-field input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 161, 214, 0.12);
+        }
+
+        .input-field input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Button */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 11px 24px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-dark);
+            box-shadow: 0 4px 12px rgba(0, 161, 214, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: #c4c7cc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        .btn-lg {
+            padding: 13px 32px;
+            font-size: 16px;
+        }
+
+        /* Single mode layout - v2: top row (upload+info) + main row (picker+preview) */
+        .single-top-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .single-top-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .single-main-row {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        @media (max-width: 768px) {
+            .single-main-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .compact-upload {
+            padding: 20px 16px;
+        }
+
+        .compact-upload .upload-icon {
+            font-size: 28px;
+            margin-bottom: 4px;
+        }
+
+        /* Preview area */
+        .preview-area {
+            position: relative;
+        }
+
+        .preview-canvas-wrapper {
+            background: #000;
+            border-radius: var(--radius);
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: var(--shadow);
+        }
+
+        .preview-canvas-wrapper canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+
+        .preview-placeholder {
+            color: var(--text-tertiary);
+            font-size: 14px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .preview-placeholder .icon {
+            font-size: 48px;
+            margin-bottom: 8px;
+            opacity: 0.3;
+        }
+
+        /* Color info */
+        .color-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .color-swatches {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .color-swatches .swatch-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            background: #fafbfc;
+            padding: 3px 8px 3px 4px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .color-swatches .swatch-item .swatch {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .preview-actions {
+            margin-top: 16px;
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Batch mode */
+        .batch-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .batch-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #fafbfc;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+        }
+
+        .batch-item:hover {
+            border-color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0, 161, 214, 0.1);
+        }
+
+        .batch-item .thumb {
+            width: 56px;
+            height: 56px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            flex-shrink: 0;
+        }
+
+        .batch-item .batch-inputs {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        @media (max-width: 600px) {
+            .batch-item {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .batch-item .thumb {
+                width: 100%;
+                height: 120px;
+            }
+
+            .batch-item .batch-inputs {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .batch-item .batch-inputs input {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--text);
+            background: white;
+            transition: var(--transition);
+        }
+
+        .batch-item .batch-inputs input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.12);
+        }
+
+        .batch-item .batch-inputs input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .batch-item .remove-btn {
+            background: none;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+
+        .batch-item .remove-btn:hover {
+            color: #f5544c;
+            background: #fef0f0;
+        }
+
+        .batch-empty {
+            text-align: center;
+            padding: 32px;
+            color: var(--text-tertiary);
+            font-size: 14px;
+        }
+
+        /* Batch preview grid */
+        .batch-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .batch-preview-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .batch-preview-card:hover {
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .batch-preview-card .preview-img {
+            width: 100%;
+            aspect-ratio: 16/9;
+            object-fit: contain;
+            background: #000;
+            display: block;
+        }
+
+        .batch-preview-card .card-info {
+            padding: 10px 12px;
+        }
+
+        .batch-preview-card .card-info .song {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .batch-preview-card .card-info .artist {
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .batch-preview-card .card-actions {
+            padding: 0 12px 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .batch-preview-card .card-actions .btn {
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+
+        /* Batch actions bar */
+        .batch-actions-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            color: white;
+            font-size: 14px;
+            box-shadow: var(--shadow-lg);
+            animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+            max-width: 360px;
+        }
+
+        .toast.success {
+            background: #52c41a;
+        }
+
+        .toast.error {
+            background: #f5544c;
+        }
+
+        .toast.info {
+            background: var(--primary);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9998;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-overlay .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-overlay .loading-text {
+            color: white;
+            font-size: 15px;
+            margin-top: 16px;
+            position: absolute;
+            top: 60%;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Tips */
+        .tips {
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--primary-light);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .tips strong {
+            color: var(--primary);
+        }
+
+        /* Section divider */
+        .section-gap {
+            height: 20px;
+        }
+
+        /* Color picker panel - always visible */
+        .color-picker-panel {
+            /* always visible, no display:none */
+        }
+
+        .picker-empty {
+            text-align: center;
+            padding: 24px 12px;
+            color: var(--text-tertiary);
+            font-size: 13px;
+        }
+
+        .picker-empty .icon {
+            font-size: 32px;
+            margin-bottom: 6px;
+            opacity: 0.3;
+        }
+
+        .color-picker-panel .picker-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .color-picker-panel .picker-header .picker-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .color-picker-panel .picker-header .picker-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .color-chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .color-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px 6px 6px;
+            border-radius: 10px;
+            border: 2px solid var(--border);
+            background: #fafbfc;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .color-chip:hover {
+            border-color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0, 161, 214, 0.15);
+        }
+
+        .color-chip.selected {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .color-chip.selected::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 16px;
+            height: 16px;
+            background: var(--primary);
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+
+        .color-chip .chip-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: 1px solid rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .color-chip .chip-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .color-chip .chip-hex {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text);
+            font-family: 'SF Mono', 'Consolas', monospace;
+        }
+
+        .color-chip .chip-pct {
+            font-size: 10px;
+            color: var(--text-tertiary);
+        }
+
+        .color-chip .chip-remove {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: #e3e5e7;
+            color: var(--text-secondary);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            transition: var(--transition);
+            flex-shrink: 0;
+            margin-left: 2px;
+        }
+
+        .color-chip .chip-remove:hover {
+            background: #f5544c;
+            color: white;
+        }
+
+        .color-add-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .color-add-row .add-color-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            background: #fafbfc;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .color-add-row .add-color-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .color-add-row .add-color-btn input[type="color"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .color-add-row .add-hex-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            color: var(--text);
+            background: white;
+            transition: var(--transition);
+        }
+
+        .color-add-row .add-hex-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 161, 214, 0.12);
+        }
+
+        .color-picker-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>B站视频封面生成器</h1>
+        <p>上传专辑封面，自动提取多色调配色，自由选择颜色搭配，一键生成 16:9 渐变视频封面</p>
+    </header>
+
+    <div class="container">
+        <!-- Mode toggle -->
+        <div class="mode-toggle">
+            <button class="active" id="modeSingle" onclick="switchMode('single')">单个生成</button>
+            <button id="modeBatch" onclick="switchMode('batch')">批量生成</button>
+        </div>
+
+        <!-- Single mode -->
+        <div class="panel active" id="panelSingle">
+            <!-- Top row: upload + song info (compact, side by side) -->
+            <div class="single-top-row">
+                <div class="card">
+                    <div class="card-title"><span class="num">1</span>上传专辑封面</div>
+                    <div class="upload-area compact-upload" id="singleUploadArea">
+                        <div class="upload-icon">🎵</div>
+                        <div class="upload-text">点击或拖拽图片到此处</div>
+                        <div class="upload-hint">支持 JPG / PNG / WEBP，建议正方形</div>
+                        <input type="file" id="singleFileInput" accept="image/*" />
+                    </div>
+                    <div class="single-image-preview" id="singleImagePreview">
+                        <img id="singleThumb" src="" alt="封面预览" />
+                        <div class="file-info">
+                            <div class="name" id="singleFileName"></div>
+                            <div id="singleFileDim"></div>
+                        </div>
+                        <button class="remove-btn" onclick="clearSingleImage()">&times;</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span class="num">2</span>输入歌曲信息</div>
+                    <div class="input-group">
+                        <div class="input-field">
+                            <label for="songName">歌曲名</label>
+                            <input type="text" id="songName" placeholder="请输入歌曲名" />
+                        </div>
+                        <div class="input-field">
+                            <label for="artistName">唱作人</label>
+                            <input type="text" id="artistName" placeholder="请输入唱作人名字" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main row: color picker (left) + preview (right), same screen, no scroll -->
+            <div class="single-main-row">
+                <div class="card color-picker-panel" id="colorPickerPanel">
+                    <div class="card-title"><span class="num">3</span>选择背景配色</div>
+                    <div class="picker-header">
+                        <span class="picker-title">提取的颜色（点击勾选/取消）</span>
+                        <span class="picker-hint">可自由添加或删除</span>
+                    </div>
+                    <div class="color-chip-list" id="colorChipList">
+                        <div class="picker-empty" id="pickerEmpty">
+                            <div class="icon">🎨</div>
+                            <div>上传图片后自动提取颜色</div>
+                        </div>
+                    </div>
+                    <div class="color-add-row">
+                        <div class="add-color-btn">
+                            <span>+ 添加自定义颜色</span>
+                            <input type="color" id="customColorInput" value="#00a1d6" />
+                        </div>
+                        <input type="text" class="add-hex-input" id="customHexInput" placeholder="#RRGGBB 或点击左侧选色" />
+                        <button class="btn btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="addCustomColor()">添加</button>
+                    </div>
+                    <div class="color-picker-actions">
+                        <button class="btn btn-secondary" style="padding:8px 14px;font-size:13px;flex:1;" onclick="selectAllColors()">全选</button>
+                        <button class="btn btn-secondary" style="padding:8px 14px;font-size:13px;flex:1;" onclick="deselectAllColors()">全不选</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span class="num">4</span>预览与下载</div>
+                    <div class="preview-area">
+                        <div class="preview-canvas-wrapper" id="singlePreviewWrapper">
+                            <div class="preview-placeholder" id="singlePlaceholder">
+                                <div class="icon">🖼️</div>
+                                <div>上传图片后<br>预览将显示在此处</div>
+                            </div>
+                            <canvas id="singleCanvas" style="display:none;"></canvas>
+                        </div>
+                        <div class="color-info" id="colorInfo" style="display:none;">
+                            <span>当前配色：</span>
+                            <div class="color-swatches" id="colorSwatches"></div>
+                        </div>
+                        <div class="preview-actions" id="singleActions" style="display:none;">
+                            <button class="btn btn-primary" onclick="downloadSingle()">下载图片</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tips">
+                <strong>使用说明：</strong><br>
+                1. 上传一张正方形专辑封面图片，工具自动提取配色<br>
+                2. 输入歌曲名和唱作人名字<br>
+                3. 在配色面板中自由勾选、添加或删除颜色，预览实时更新<br>
+                4. 满意后点击「下载图片」，尺寸为 1920×1080（16:9）
+            </div>
+        </div>
+
+        <!-- Batch mode -->
+        <div class="panel" id="panelBatch">
+            <div class="card">
+                <div class="card-title"><span class="num">1</span>批量上传图片</div>
+                <div class="upload-area" id="batchUploadArea">
+                    <div class="upload-icon">📦</div>
+                    <div class="upload-text">点击或拖拽多张图片到此处</div>
+                    <div class="upload-hint">支持 JPG / PNG / WEBP，可多选</div>
+                    <input type="file" id="batchFileInput" accept="image/*" multiple />
+                </div>
+            </div>
+
+            <div class="section-gap"></div>
+
+            <div class="card">
+                <div class="card-title"><span class="num">2</span>编辑歌曲信息</div>
+                <div class="batch-list" id="batchList">
+                    <div class="batch-empty" id="batchEmpty">尚未上传任何图片</div>
+                </div>
+            </div>
+
+            <div class="section-gap"></div>
+
+            <div class="batch-actions-bar">
+                <button class="btn btn-primary btn-lg" id="generateAllBtn" onclick="generateBatch()" disabled>
+                    批量生成封面
+                </button>
+                <button class="btn btn-secondary btn-lg" onclick="clearBatch()">
+                    清空列表
+                </button>
+            </div>
+
+            <div class="section-gap"></div>
+
+            <div class="card" id="batchResultCard" style="display:none;">
+                <div class="card-title"><span class="num">3</span>生成结果</div>
+                <div class="batch-preview-grid" id="batchPreviewGrid"></div>
+                <div class="batch-actions-bar">
+                    <button class="btn btn-primary btn-lg" onclick="downloadBatchZip()">
+                        下载全部 (ZIP)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        B站视频封面生成器 | 自动提取多色调 · 自由搭配配色 · 16:9 比例 · 支持批量处理
+    </footer>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div style="text-align:center;">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loadingText">正在生成中...</div>
+        </div>
+    </div>
+
+    <script>
+        /* ========== JSZip (inline, minimal) ========== */
+        /* Load JSZip from CDN */
+        (function() {
+            var script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+            script.onerror = function() { console.warn('JSZip failed to load; ZIP download will be unavailable.'); };
+            document.head.appendChild(script);
+        })();
+
+        /* ========== State ========== */
+        let singleImage = null;   // { img: HTMLImageElement, file: File }
+        let batchItems = [];      // [{ id, file, img, songName, artistName }]
+        let batchResults = [];    // [{ canvas, songName, artistName, dataUrl }]
+        let batchIdCounter = 0;
+        let extractedPalette = [];      // Full palette extracted from image: [{ r, g, b, weight, selected, id }]
+        let colorIdCounter = 0;          // Unique ID counter for color items
+
+        /* ========== Mode switching ========== */
+        function switchMode(mode) {
+            document.querySelectorAll('.mode-toggle button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            if (mode === 'single') {
+                document.getElementById('modeSingle').classList.add('active');
+                document.getElementById('panelSingle').classList.add('active');
+            } else {
+                document.getElementById('modeBatch').classList.add('active');
+                document.getElementById('panelBatch').classList.add('active');
+            }
+        }
+
+        /* ========== Toast ========== */
+        function showToast(message, type) {
+            type = type || 'info';
+            var container = document.getElementById('toastContainer');
+            var toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+        /* ========== Loading ========== */
+        function showLoading(text) {
+            document.getElementById('loadingText').textContent = text || '正在生成中...';
+            document.getElementById('loadingOverlay').classList.add('show');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        /* ========== Color utilities ========== */
+        function rgbToCss(c) {
+            return 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
+        }
+
+        function rgbaToCss(c, a) {
+            return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
+        }
+
+        function rgbToHex(c) {
+            function h(n) { var s = n.toString(16); return s.length === 1 ? '0' + s : s; }
+            return '#' + h(c.r) + h(c.g) + h(c.b);
+        }
+
+        function adjustColor(c, factor) {
+            return {
+                r: Math.max(0, Math.min(255, Math.round(c.r * factor))),
+                g: Math.max(0, Math.min(255, Math.round(c.g * factor))),
+                b: Math.max(0, Math.min(255, Math.round(c.b * factor)))
+            };
+        }
+
+        function getLuminance(c) {
+            return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+        }
+
+        function getReadableTextColor(bgColor) {
+            return getLuminance(bgColor) > 0.55 ? '#1a1a2e' : '#ffffff';
+        }
+
+        /* ========== Multi-color palette extraction ========== */
+        function extractColorPalette(img, maxColors) {
+            maxColors = maxColors || 5;
+            // Draw image to small canvas for fast sampling
+            var sampleSize = 100;
+            var canvas = document.createElement('canvas');
+            canvas.width = sampleSize;
+            canvas.height = sampleSize;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+
+            var imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
+            var data = imageData.data;
+
+            // Build color histogram with quantization
+            var colorMap = {};
+            var totalPixels = 0;
+
+            for (var i = 0; i < data.length; i += 4) {
+                var r = data[i];
+                var g = data[i + 1];
+                var b = data[i + 2];
+                var a = data[i + 3];
+
+                if (a < 128) continue;
+
+                // Skip near-black and near-white
+                if (r + g + b < 45) continue;
+                if (r > 235 && g > 235 && b > 235) continue;
+
+                // Quantize to reduce noise (bucket size 20)
+                var qr = Math.round(r / 20) * 20;
+                var qg = Math.round(g / 20) * 20;
+                var qb = Math.round(b / 20) * 20;
+
+                var key = qr + ',' + qg + ',' + qb;
+                if (!colorMap[key]) {
+                    colorMap[key] = { count: 0, r: 0, g: 0, b: 0 };
+                }
+                colorMap[key].count++;
+                colorMap[key].r += r;
+                colorMap[key].g += g;
+                colorMap[key].b += b;
+                totalPixels++;
+            }
+
+            if (totalPixels === 0) {
+                return [{ r: 40, g: 40, b: 50, weight: 1 }];
+            }
+
+            // Convert to array and compute average color per bucket
+            var entries = [];
+            for (var key in colorMap) {
+                entries.push({
+                    r: Math.round(colorMap[key].r / colorMap[key].count),
+                    g: Math.round(colorMap[key].g / colorMap[key].count),
+                    b: Math.round(colorMap[key].b / colorMap[key].count),
+                    count: colorMap[key].count
+                });
+            }
+
+            // Sort by count descending
+            entries.sort(function(a, b) { return b.count - a.count; });
+
+            // Take top candidates (more than needed, then merge)
+            var candidates = entries.slice(0, Math.min(entries.length, maxColors * 3));
+
+            // Merge similar colors
+            var merged = mergeSimilarColors(candidates, 55);
+
+            // Take top maxColors
+            merged = merged.slice(0, maxColors);
+
+            // Ensure at least 1 color
+            if (merged.length === 0) {
+                merged = [{ r: 40, g: 40, b: 50, count: 1 }];
+            }
+
+            // Calculate weights
+            var totalCount = 0;
+            merged.forEach(function(c) { totalCount += c.count; });
+
+            var palette = merged.map(function(c) {
+                return {
+                    r: c.r,
+                    g: c.g,
+                    b: c.b,
+                    weight: c.count / totalCount
+                };
+            });
+
+            // Normalize weights to sum to 1
+            var weightSum = 0;
+            palette.forEach(function(c) { weightSum += c.weight; });
+            if (weightSum > 0) {
+                palette.forEach(function(c) { c.weight = c.weight / weightSum; });
+            }
+
+            return palette;
+        }
+
+        /* Merge colors that are visually similar (Euclidean distance < threshold) */
+        function mergeSimilarColors(colors, threshold) {
+            var merged = [];
+            colors.forEach(function(color) {
+                var found = false;
+                for (var i = 0; i < merged.length; i++) {
+                    var m = merged[i];
+                    var dist = Math.sqrt(
+                        Math.pow(color.r - m.r, 2) +
+                        Math.pow(color.g - m.g, 2) +
+                        Math.pow(color.b - m.b, 2)
+                    );
+                    if (dist < threshold) {
+                        // Merge: weighted average by count
+                        var total = m.count + color.count;
+                        m.r = Math.round((m.r * m.count + color.r * color.count) / total);
+                        m.g = Math.round((m.g * m.count + color.g * color.count) / total);
+                        m.b = Math.round((m.b * m.count + color.b * color.count) / total);
+                        m.count = total;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    merged.push({ r: color.r, g: color.g, b: color.b, count: color.count });
+                }
+            });
+            // Re-sort by count after merging
+            merged.sort(function(a, b) { return b.count - a.count; });
+            return merged;
+        }
+
+        /* ========== Canvas rendering ========== */
+        function renderCover(canvas, img, songName, artistName, customPalette) {
+            var W = 1920;
+            var H = 1080;
+            canvas.width = W;
+            canvas.height = H;
+            var ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // Use custom palette if provided, otherwise extract from image
+            var palette = customPalette || extractColorPalette(img, 5);
+
+            // --- Soft blurred gradient background (image-like, no harsh lines) ---
+            // Replicates the reference image: dominant color on the left softly fading
+            // to darker tones on the right. Uses offscreen canvas + heavy blur for a
+            // smooth, dreamy transition with no arcs or X patterns.
+            var nColors = palette.length;
+            var blurPx = 90;
+            var downScale = 6;
+
+            // Offscreen canvas: smaller for performance, with padding to avoid blur edge clipping
+            var srcW = Math.ceil(W / downScale);
+            var srcH = Math.ceil(H / downScale);
+            var offW = srcW + blurPx * 2;
+            var offH = srcH + blurPx * 2;
+            var off = document.createElement('canvas');
+            off.width = offW;
+            off.height = offH;
+            var octx = off.getContext('2d');
+
+            // Layer 1: diagonal gradient from bottom-left to top-right (matches reference image)
+            var grad = octx.createLinearGradient(blurPx, offH - blurPx, offW - blurPx, blurPx);
+            if (nColors === 1) {
+                grad.addColorStop(0, rgbToCss(palette[0]));
+                grad.addColorStop(1, rgbToCss(adjustColor(palette[0], 0.38)));
+            } else {
+                palette.forEach(function(color, i) {
+                    grad.addColorStop(i / (nColors - 1), rgbToCss(color));
+                });
+            }
+            octx.fillStyle = grad;
+            octx.fillRect(0, 0, offW, offH);
+
+            // Blit the center region to main canvas with heavy blur
+            // Extend destination beyond canvas bounds so blur edge darkening
+            // falls outside the visible area — no black border.
+            ctx.save();
+            ctx.filter = 'blur(' + blurPx + 'px)';
+            ctx.drawImage(off, blurPx, blurPx, srcW, srcH, -blurPx, -blurPx, W + blurPx * 2, H + blurPx * 2);
+            ctx.restore();
+
+            // Layer 2: subtle opposing diagonal, reversed colors, very low opacity
+            // Adds color depth without creating a sharp X (heavily blurred)
+            if (nColors >= 2) {
+                octx.clearRect(0, 0, offW, offH);
+                var grad2 = octx.createLinearGradient(blurPx, blurPx, offW - blurPx, offH - blurPx);
+                var reversed = palette.slice().reverse();
+                reversed.forEach(function(color, i) {
+                    grad2.addColorStop(i / (nColors - 1), rgbaToCss(color, 0.30));
+                });
+                octx.fillStyle = grad2;
+                octx.fillRect(0, 0, offW, offH);
+
+                ctx.save();
+                ctx.filter = 'blur(' + blurPx + 'px)';
+                ctx.drawImage(off, blurPx, blurPx, srcW, srcH, -blurPx, -blurPx, W + blurPx * 2, H + blurPx * 2);
+                ctx.restore();
+            }
+
+            // --- Album cover ---
+            var coverSize = 560;
+            var coverX = (W - coverSize) / 2;
+            var coverY = (H - coverSize) / 2 - 30;
+
+            // Save context for shadow
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+            ctx.shadowBlur = 50;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 12;
+
+            // Crop to center square
+            var minDim = Math.min(img.naturalWidth, img.naturalHeight);
+            var sx = (img.naturalWidth - minDim) / 2;
+            var sy = (img.naturalHeight - minDim) / 2;
+            ctx.drawImage(img, sx, sy, minDim, minDim, coverX, coverY, coverSize, coverSize);
+            ctx.restore();
+
+            // Cover border (subtle white)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(coverX, coverY, coverSize, coverSize);
+
+            // Inner border for depth
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(coverX + 3, coverY + 3, coverSize - 6, coverSize - 6);
+
+            // --- Text: song name — artist name on the same line, below the cover ---
+            var avgLum = 0;
+            palette.forEach(function(c) { avgLum += getLuminance(c) * c.weight; });
+            avgLum = avgLum * 0.90;
+            var textColor = avgLum > 0.55 ? '#1a1a2e' : '#ffffff';
+            var shadowColor = (textColor === '#ffffff') ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)';
+
+            // Build combined text: "歌曲名 — 唱作人"
+            var parts = [];
+            if (songName) parts.push(songName);
+            if (artistName) parts.push(artistName);
+            var combinedText = parts.join(' \u2014 ');
+
+            if (combinedText) {
+                var textFont = 'bold 52px "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif';
+                var textSize = fitTextSize(ctx, combinedText, W - 200, 52, textFont, 22);
+                ctx.font = textFont.replace('52px', textSize + 'px');
+                ctx.fillStyle = textColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.shadowColor = shadowColor;
+                ctx.shadowBlur = 14;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 3;
+                ctx.fillText(combinedText, W / 2, coverY + coverSize + 50);
+            }
+
+            // Reset shadow
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+
+            return palette;
+        }
+
+        /* Fit text to max width by reducing font size */
+        function fitTextSize(ctx, text, maxWidth, baseSize, fontTemplate, minSize) {
+            if (!text) return baseSize;
+            var size = baseSize;
+            ctx.font = fontTemplate.replace(baseSize + 'px', size + 'px');
+            while (ctx.measureText(text).width > maxWidth && size > minSize) {
+                size -= 2;
+                ctx.font = fontTemplate.replace(baseSize + 'px', size + 'px');
+            }
+            return size;
+        }
+
+        /* ========== Single mode ========== */
+        function loadSingleImage(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                showToast('请选择有效的图片文件', 'error');
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    singleImage = { img: img, file: file };
+                    // Show preview
+                    document.getElementById('singleThumb').src = e.target.result;
+                    document.getElementById('singleFileName').textContent = file.name;
+                    document.getElementById('singleFileDim').textContent = img.naturalWidth + ' × ' + img.naturalHeight + ' px';
+                    document.getElementById('singleImagePreview').classList.add('show');
+                    // Auto-fill song name from filename (without extension)
+                    var nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+                    if (!document.getElementById('songName').value) {
+                        document.getElementById('songName').value = nameWithoutExt;
+                    }
+                    // Auto-extract colors and render preview
+                    extractColors(false);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearSingleImage() {
+            singleImage = null;
+            extractedPalette = [];
+            document.getElementById('singleImagePreview').classList.remove('show');
+            document.getElementById('singleFileInput').value = '';
+            // Reset color picker
+            renderColorPicker();
+            // Reset preview
+            document.getElementById('singlePlaceholder').style.display = 'block';
+            document.getElementById('singleCanvas').style.display = 'none';
+            document.getElementById('colorInfo').style.display = 'none';
+            document.getElementById('singleActions').style.display = 'none';
+        }
+
+        function extractColors(showLoadingOverlay) {
+            if (!singleImage) {
+                showToast('请先上传图片', 'error');
+                return;
+            }
+            if (showLoadingOverlay) showLoading('正在提取配色...');
+
+            setTimeout(function() {
+                try {
+                    var palette = extractColorPalette(singleImage.img, 8);
+
+                    extractedPalette = palette.map(function(c) {
+                        return {
+                            id: ++colorIdCounter,
+                            r: c.r,
+                            g: c.g,
+                            b: c.b,
+                            weight: c.weight,
+                            selected: true,
+                            isCustom: false
+                        };
+                    });
+
+                    renderColorPicker();
+                    renderPreview();
+
+                    if (showLoadingOverlay) hideLoading();
+                    if (showLoadingOverlay) showToast('已提取 ' + extractedPalette.length + ' 种颜色', 'info');
+                } catch (err) {
+                    if (showLoadingOverlay) hideLoading();
+                    showToast('提取配色失败：' + err.message, 'error');
+                    console.error(err);
+                }
+            }, 50);
+        }
+
+        /* ========== Color picker functions ========== */
+        function renderColorPicker() {
+            var listEl = document.getElementById('colorChipList');
+
+            if (extractedPalette.length === 0) {
+                listEl.innerHTML = '<div class="picker-empty"><div class="icon">🎨</div><div>上传图片后自动提取颜色</div></div>';
+                return;
+            }
+
+            listEl.innerHTML = '';
+
+            extractedPalette.forEach(function(item) {
+                var chip = document.createElement('div');
+                chip.className = 'color-chip' + (item.selected ? ' selected' : '');
+                chip.setAttribute('data-id', item.id);
+                chip.onclick = function(e) {
+                    if (e.target.classList.contains('chip-remove')) return;
+                    toggleColorSelection(item.id);
+                };
+
+                var swatch = document.createElement('div');
+                swatch.className = 'chip-swatch';
+                swatch.style.background = rgbToCss(item);
+
+                var info = document.createElement('div');
+                info.className = 'chip-info';
+
+                var hexLabel = document.createElement('span');
+                hexLabel.className = 'chip-hex';
+                hexLabel.textContent = rgbToHex(item).toUpperCase();
+
+                var pctLabel = document.createElement('span');
+                pctLabel.className = 'chip-pct';
+                if (item.isCustom) {
+                    pctLabel.textContent = '自定义';
+                } else {
+                    pctLabel.textContent = (item.weight * 100).toFixed(1) + '%';
+                }
+
+                info.appendChild(hexLabel);
+                info.appendChild(pctLabel);
+
+                var removeBtn = document.createElement('button');
+                removeBtn.className = 'chip-remove';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.title = '删除此颜色';
+                removeBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    removeColorFromPalette(item.id);
+                };
+
+                chip.appendChild(swatch);
+                chip.appendChild(info);
+                chip.appendChild(removeBtn);
+                listEl.appendChild(chip);
+            });
+        }
+
+        function toggleColorSelection(id) {
+            var item = extractedPalette.find(function(c) { return c.id === id; });
+            if (item) {
+                item.selected = !item.selected;
+                renderColorPicker();
+                renderPreview();
+            }
+        }
+
+        function removeColorFromPalette(id) {
+            extractedPalette = extractedPalette.filter(function(c) { return c.id !== id; });
+            renderColorPicker();
+            renderPreview();
+            showToast('已移除该颜色', 'info');
+        }
+
+        function addCustomColor() {
+            var hexInput = document.getElementById('customHexInput');
+            var colorInput = document.getElementById('customColorInput');
+            var hexVal = hexInput.value.trim() || colorInput.value;
+
+            hexVal = hexVal.replace(/^#/, '');
+            if (!/^[0-9a-fA-F]{6}$/.test(hexVal)) {
+                showToast('请输入有效的 6 位 HEX 颜色值', 'error');
+                return;
+            }
+
+            var r = parseInt(hexVal.substring(0, 2), 16);
+            var g = parseInt(hexVal.substring(2, 4), 16);
+            var b = parseInt(hexVal.substring(4, 6), 16);
+
+            var exists = extractedPalette.some(function(c) {
+                return c.r === r && c.g === g && c.b === b;
+            });
+            if (exists) {
+                showToast('该颜色已存在', 'error');
+                return;
+            }
+
+            extractedPalette.push({
+                id: ++colorIdCounter,
+                r: r,
+                g: g,
+                b: b,
+                weight: 0,
+                selected: true,
+                isCustom: true
+            });
+
+            renderColorPicker();
+            renderPreview();
+            hexInput.value = '';
+            showToast('已添加自定义颜色', 'success');
+        }
+
+        function selectAllColors() {
+            extractedPalette.forEach(function(c) { c.selected = true; });
+            renderColorPicker();
+            renderPreview();
+        }
+
+        function deselectAllColors() {
+            extractedPalette.forEach(function(c) { c.selected = false; });
+            renderColorPicker();
+            renderPreview();
+        }
+
+        /* ========== Real-time preview rendering ========== */
+        function renderPreview() {
+            if (!singleImage) return;
+
+            var songName = document.getElementById('songName').value.trim();
+            var artistName = document.getElementById('artistName').value.trim();
+
+            // Get selected colors
+            var selected = extractedPalette.filter(function(c) { return c.selected; });
+
+            var customPalette;
+            if (selected.length > 0) {
+                var totalWeight = 0;
+                selected.forEach(function(c) { totalWeight += (c.weight || 0.01); });
+                customPalette = selected.map(function(c) {
+                    return {
+                        r: c.r,
+                        g: c.g,
+                        b: c.b,
+                        weight: (c.weight || 0.01) / totalWeight
+                    };
+                });
+            } else {
+                // No colors selected — use neutral dark background
+                customPalette = [{ r: 30, g: 30, b: 40, weight: 1 }];
+            }
+
+            var canvas = document.getElementById('singleCanvas');
+            var palette = renderCover(canvas, singleImage.img, songName, artistName, customPalette);
+
+            // Show preview
+            document.getElementById('singlePlaceholder').style.display = 'none';
+            canvas.style.display = 'block';
+
+            // Show color info
+            document.getElementById('colorInfo').style.display = 'flex';
+            var swatchesEl = document.getElementById('colorSwatches');
+            swatchesEl.innerHTML = '';
+            palette.forEach(function(c) {
+                var item = document.createElement('div');
+                item.className = 'swatch-item';
+                var swatch = document.createElement('div');
+                swatch.className = 'swatch';
+                swatch.style.background = rgbToCss(c);
+                var label = document.createElement('span');
+                label.textContent = rgbToHex(c).toUpperCase();
+                item.appendChild(swatch);
+                item.appendChild(label);
+                swatchesEl.appendChild(item);
+            });
+
+            // Show download button
+            document.getElementById('singleActions').style.display = 'flex';
+        }
+
+        function downloadSingle() {
+            var canvas = document.getElementById('singleCanvas');
+            if (!canvas || !canvas.width) {
+                showToast('请先生成封面', 'error');
+                return;
+            }
+            var songName = document.getElementById('songName').value.trim() || 'cover';
+            canvas.toBlob(function(blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = songName + '_bilibili_cover.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('图片已下载', 'success');
+            }, 'image/png');
+        }
+
+        /* ========== Batch mode ========== */
+        function handleBatchFiles(files) {
+            var imageFiles = Array.prototype.filter.call(files, function(f) {
+                return f.type.startsWith('image/');
+            });
+
+            if (imageFiles.length === 0) {
+                showToast('未找到有效的图片文件', 'error');
+                return;
+            }
+
+            var loaded = 0;
+            imageFiles.forEach(function(file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var img = new Image();
+                    img.onload = function() {
+                        var id = ++batchIdCounter;
+                        var nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+                        batchItems.push({
+                            id: id,
+                            file: file,
+                            img: img,
+                            thumbUrl: e.target.result,
+                            songName: nameWithoutExt,
+                            artistName: ''
+                        });
+                        loaded++;
+                        if (loaded === imageFiles.length) {
+                            renderBatchList();
+                            checkGenerateAllBtn();
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+
+            showToast('已添加 ' + imageFiles.length + ' 张图片', 'success');
+        }
+
+        function renderBatchList() {
+            var list = document.getElementById('batchList');
+            var empty = document.getElementById('batchEmpty');
+
+            if (batchItems.length === 0) {
+                empty.style.display = 'block';
+                // Remove all item elements
+                var items = list.querySelectorAll('.batch-item');
+                items.forEach(function(el) { el.remove(); });
+                return;
+            }
+
+            empty.style.display = 'none';
+
+            // Rebuild list
+            var html = '';
+            batchItems.forEach(function(item) {
+                html += '<div class="batch-item" data-id="' + item.id + '">'
+                    + '<img class="thumb" src="' + item.thumbUrl + '" alt="封面" />'
+                    + '<div class="batch-inputs">'
+                    + '<input type="text" placeholder="歌曲名" value="' + escapeHtml(item.songName) + '" '
+                    + 'oninput="updateBatchItem(' + item.id + ', \'songName\', this.value)" />'
+                    + '<input type="text" placeholder="唱作人" value="' + escapeHtml(item.artistName) + '" '
+                    + 'oninput="updateBatchItem(' + item.id + ', \'artistName\', this.value)" />'
+                    + '</div>'
+                    + '<button class="remove-btn" onclick="removeBatchItem(' + item.id + ')">&times;</button>'
+                    + '</div>';
+            });
+
+            // Remove old items
+            var oldItems = list.querySelectorAll('.batch-item');
+            oldItems.forEach(function(el) { el.remove(); });
+
+            // Append new items
+            list.insertAdjacentHTML('beforeend', html);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function updateBatchItem(id, field, value) {
+            var item = batchItems.find(function(b) { return b.id === id; });
+            if (item) {
+                item[field] = value;
+            }
+        }
+
+        function removeBatchItem(id) {
+            batchItems = batchItems.filter(function(b) { return b.id !== id; });
+            renderBatchList();
+            checkGenerateAllBtn();
+        }
+
+        function clearBatch() {
+            if (batchItems.length === 0) return;
+            batchItems = [];
+            batchResults = [];
+            renderBatchList();
+            document.getElementById('batchResultCard').style.display = 'none';
+            document.getElementById('batchPreviewGrid').innerHTML = '';
+            document.getElementById('batchFileInput').value = '';
+            checkGenerateAllBtn();
+            showToast('已清空列表', 'info');
+        }
+
+        function checkGenerateAllBtn() {
+            document.getElementById('generateAllBtn').disabled = batchItems.length === 0;
+        }
+
+        function generateBatch() {
+            if (batchItems.length === 0) {
+                showToast('请先上传图片', 'error');
+                return;
+            }
+
+            // Validate: at least some info
+            var hasEmpty = batchItems.every(function(item) {
+                return !item.songName.trim() && !item.artistName.trim();
+            });
+            if (hasEmpty) {
+                showToast('请至少为部分图片填写歌曲名或唱作人', 'error');
+                return;
+            }
+
+            showLoading('正在批量生成封面 (0/' + batchItems.length + ')...');
+
+            batchResults = [];
+            var grid = document.getElementById('batchPreviewGrid');
+            grid.innerHTML = '';
+
+            var i = 0;
+
+            function processNext() {
+                if (i >= batchItems.length) {
+                    hideLoading();
+                    document.getElementById('batchResultCard').style.display = 'block';
+                    showToast('批量生成完成！共 ' + batchResults.length + ' 张', 'success');
+                    return;
+                }
+
+                var item = batchItems[i];
+                showLoading('正在批量生成封面 (' + (i + 1) + '/' + batchItems.length + ')...');
+
+                // Use setTimeout to allow UI update
+                setTimeout(function() {
+                    try {
+                        var canvas = document.createElement('canvas');
+                        var songName = item.songName.trim() || '未命名';
+                        var artistName = item.artistName.trim();
+                        renderCover(canvas, item.img, songName, artistName);
+
+                        var dataUrl = canvas.toDataURL('image/png');
+                        batchResults.push({
+                            canvas: canvas,
+                            songName: songName,
+                            artistName: artistName,
+                            dataUrl: dataUrl,
+                            fileName: songName + '_bilibili_cover.png'
+                        });
+
+                        // Add to grid
+                        var card = document.createElement('div');
+                        card.className = 'batch-preview-card';
+                        card.innerHTML =
+                            '<img class="preview-img" src="' + dataUrl + '" alt="预览" />'
+                            + '<div class="card-info">'
+                            + '<div class="song">' + escapeHtml(songName) + '</div>'
+                            + '<div class="artist">' + escapeHtml(artistName ? '\u2014 ' + artistName : '') + '</div>'
+                            + '</div>'
+                            + '<div class="card-actions">'
+                            + '<button class="btn btn-primary" onclick="downloadBatchItem(' + i + ')">下载</button>'
+                            + '</div>';
+                        grid.appendChild(card);
+
+                        i++;
+                        processNext();
+                    } catch (err) {
+                        console.error('Error generating cover for item ' + i, err);
+                        i++;
+                        processNext();
+                    }
+                }, 30);
+            }
+
+            processNext();
+        }
+
+        function downloadBatchItem(index) {
+            if (!batchResults[index]) return;
+            var result = batchResults[index];
+            var a = document.createElement('a');
+            a.href = result.dataUrl;
+            a.download = result.fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('图片已下载', 'success');
+        }
+
+        function downloadBatchZip() {
+            if (batchResults.length === 0) {
+                showToast('没有可下载的图片', 'error');
+                return;
+            }
+
+            if (typeof JSZip === 'undefined') {
+                showToast('ZIP 库未加载，将逐个下载', 'info');
+                batchResults.forEach(function(r, idx) { downloadBatchItem(idx); });
+                return;
+            }
+
+            showLoading('正在打包下载...');
+
+            setTimeout(function() {
+                var zip = new JSZip();
+                var folder = zip.folder('bilibili-covers');
+                var usedNames = {};
+
+                batchResults.forEach(function(result) {
+                    var baseName = result.songName || 'cover';
+                    var fileName = baseName + '_bilibili_cover.png';
+                    // Avoid duplicate names
+                    if (usedNames[fileName]) {
+                        var counter = 2;
+                        while (usedNames[fileName + '_' + counter + '.png']) counter++;
+                        fileName = baseName + '_bilibili_cover_' + counter + '.png';
+                    }
+                    usedNames[fileName] = true;
+
+                    // Extract base64 data from data URL
+                    var base64 = result.dataUrl.split(',')[1];
+                    folder.file(fileName, base64, { base64: true });
+                });
+
+                zip.generateAsync({ type: 'blob' }).then(function(content) {
+                    var url = URL.createObjectURL(content);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'bilibili-covers.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    hideLoading();
+                    showToast('ZIP 包已下载', 'success');
+                }).catch(function(err) {
+                    hideLoading();
+                    showToast('打包失败：' + err.message, 'error');
+                    console.error(err);
+                });
+            }, 50);
+        }
+
+        /* ========== Drag & Drop ========== */
+        function setupDragDrop(areaId, handler) {
+            var area = document.getElementById(areaId);
+            area.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                area.classList.add('dragover');
+            });
+            area.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                area.classList.remove('dragover');
+            });
+            area.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                area.classList.remove('dragover');
+                var files = e.dataTransfer.files;
+                if (files && files.length > 0) {
+                    handler(files);
+                }
+            });
+        }
+
+        /* ========== Init ========== */
+        (function init() {
+            // Single mode file input
+            document.getElementById('singleFileInput').addEventListener('change', function(e) {
+                if (e.target.files && e.target.files[0]) {
+                    loadSingleImage(e.target.files[0]);
+                }
+            });
+
+            // Batch mode file input
+            document.getElementById('batchFileInput').addEventListener('change', function(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    handleBatchFiles(e.target.files);
+                }
+            });
+
+            // Drag & drop
+            setupDragDrop('singleUploadArea', function(files) {
+                loadSingleImage(files[0]);
+            });
+            setupDragDrop('batchUploadArea', function(files) {
+                handleBatchFiles(files);
+            });
+
+            // Real-time preview: re-render on text input change (debounced)
+            var renderTimer = null;
+            function debouncedRender() {
+                if (renderTimer) clearTimeout(renderTimer);
+                renderTimer = setTimeout(function() {
+                    if (singleImage && extractedPalette.length > 0) {
+                        renderPreview();
+                    }
+                }, 200);
+            }
+            document.getElementById('songName').addEventListener('input', debouncedRender);
+            document.getElementById('artistName').addEventListener('input', debouncedRender);
+
+            // Paste support
+            document.addEventListener('paste', function(e) {
+                var items = e.clipboardData.items;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        var file = items[i].getAsFile();
+                        if (file) {
+                            if (document.getElementById('panelSingle').classList.contains('active')) {
+                                loadSingleImage(file);
+                            } else {
+                                handleBatchFiles([file]);
+                            }
+                            break;
+                        }
+                    }
+                }
+            });
+
+            // Custom color input sync
+            var colorInput = document.getElementById('customColorInput');
+            var hexInput = document.getElementById('customHexInput');
+            if (colorInput) {
+                colorInput.addEventListener('input', function(e) {
+                    hexInput.value = e.target.value.toUpperCase();
+                });
+            }
+            if (hexInput) {
+                hexInput.addEventListener('input', function(e) {
+                    var val = e.target.value.trim().replace(/^#/, '');
+                    if (/^[0-9a-fA-F]{6}$/.test(val)) {
+                        colorInput.value = '#' + val;
+                    }
+                });
+                hexInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        addCustomColor();
+                    }
+                });
+            }
+        })();
+    </script>
+</body>
+</html>
